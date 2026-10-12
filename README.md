@@ -17,7 +17,7 @@
 
 ## 游玩与部署
 
-- 测试地址：[ten.mimaglows.com:44580](https://ten.mimaglows.com:44580/)（文章提供的测试服，不保证持续可用）。
+- 测试地址：[ten.mimaglows.com:44580](https://ten.mimaglows.com:44580/)（测试服，高并行的情况下网络承压会比较卡顿，不保证持续可用）。
 - 反馈交流：`588210551`。
 - 自行部署：克隆本仓库的 `codex/windows-v0.2.4-custom` 分支；Windows 安装 Node.js 22 或更高版本后，双击根目录 `start-custom-windows.cmd`。完整说明见[定制版部署与验证记录](https://github.com/MimaGlows/Stronghold-Protocol/blob/codex/windows-v0.2.4-custom/docs/GITHUB-WINDOWS-CUSTOM.md)。
 
