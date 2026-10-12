@@ -13,7 +13,7 @@
 
 import WebSocket from 'ws';
 
-const REPLY_TYPES = new Set(['ok', 'error', 'welcome', 'pong']);
+const REPLY_TYPES = new Set(['profile.stats', 'ok', 'error', 'welcome', 'pong']);
 
 export class TestClient {
   /**

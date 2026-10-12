@@ -12,14 +12,14 @@ test('old settings migrate to inherit, malformed or prototype entries are discar
 test('per-character override survives persistence; deletion restores the current global setting', () => {
   const settings = sanitizeSettings(JSON.parse(JSON.stringify({ voiceLang: 'cn', voiceOverrides: { [a]: 'jp', [b]: 'cn' } })));
   const manager = new AudioManager();
-  manager.setVoiceLang(settings.voiceLang, settings.voiceOverrides);
-  assert.equal(voiceLangFor(a, manager.voiceLang, manager.voiceOverrides), 'jp');
+  manager.setVoicePreferences(settings);
+  assert.equal(voiceLangFor(a, manager.voiceLang, manager.voicePreferences.voiceOverrides), 'jp');
   manager.setVoiceLang('jp');
-  assert.equal(voiceLangFor(b, manager.voiceLang, manager.voiceOverrides), 'cn');
+  assert.equal(voiceLangFor(b, manager.voiceLang, manager.voicePreferences.voiceOverrides), 'cn');
   delete settings.voiceOverrides[b];
-  manager.setVoiceLang('jp', settings.voiceOverrides);
-  assert.equal(voiceLangFor(b, manager.voiceLang, manager.voiceOverrides), 'jp');
-  assert.equal(voiceLangFor('unknown', 'cn', manager.voiceOverrides), 'cn');
+  manager.setVoicePreferences({ voiceLanguage: 'jp', voiceOverrides: settings.voiceOverrides });
+  assert.equal(voiceLangFor(b, manager.voiceLang, manager.voicePreferences.voiceOverrides), 'jp');
+  assert.equal(voiceLangFor('unknown', 'cn', manager.voicePreferences.voiceOverrides), 'cn');
 });
 test('the per-operator JP preference retains the existing per-slot Chinese fallback', () => {
   const tree = { voice: { [a]: { select: '/cn.mp3' } }, voiceJp: { [a]: { skill1: '/jp.mp3' } } };

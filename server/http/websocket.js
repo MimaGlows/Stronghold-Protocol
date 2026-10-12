@@ -25,7 +25,9 @@ export function createSessionStack(opts, { data, log }) {
   const netOptions = netOptionsFrom(opts);
   const registry = new SessionRegistry({ reconnectWindowMs: netOptions.reconnectWindowMs ?? NET_DEFAULTS.reconnectWindowMs });
   const lobbyOptions = lobbyOptionsFrom(opts);
-  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions });
+  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, replayArchive: opts.replayArchive, options: lobbyOptions });
+  lobby.profiles = opts.profiles || null;
+  if (lobby.profiles) lobby.profiles.onSave = (profile) => lobby.social.profileSaved(profile);
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   return { registry, lobby, network };
 }

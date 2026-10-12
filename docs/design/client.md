@@ -150,3 +150,12 @@ It does not diagnose a particular user's GPU or persist a disabled renderer pref
 Community UI and recovery (§29.6): DIY reuses roster stats and skill previews; Swire's coins show current/cap. The lobby player chip opens statistics and the responsive header keeps optional controls from overlapping its title. Settlement's summary scrolls separately from Return. Failed board art can retry, and failed three.js imports use two bounded fresh URLs. Failed engine initialization can remount on online/visibility, at most twice consecutively, cleaning up each previous view; explicit fallback/2D stays selected.
 
 Replacing a field renderer also resets the game screen's entered-view identity. Frames are buffered while the replacement loads; after subscribing, the local runner re-shows full current metadata/snapshot, or the server resends the watched field. Real local and server-streamed battles preserve the same simulation object and clock through recovery, including enemies spawned before the new renderer existed.
+
+
+## Windows 定制：服务器伪账号统计（2026-10-09）
+
+“统计”的总览、策略、战斗累计和对局记录属于完整博士代号与四位编号，持久化于服务器档案 statistics（v=1、revision、records）。沿用官方计数口径与最近 1000 条上限。客户端不提交统计写入，不再提供导出、导入或清空。首页和选择页的独立游玩记录入口移除；记录详情、回放与分享使用同一统计历史入口。
+
+新增 C2S profile.stats.get {offset?}，服务端仅查询当前会话账号；S2C profile.stats 携带 profileKey、revision、aggregate、total、records、offset、next，每页最多 50 条且列表行限制 40 KiB。welcome 携带 statsRevision，不携带整个历史；profile.stats.changed 提示刷新。分页修订号变化时重新读取第一页，账号切换和异步响应均校验身份。
+
+服务端正常结算或永久离场后原子保存，以稳定局号去重。退出记录不会被队友后续结算覆盖；暂时断线不是退出，观战和 AI 不产生账号统计。每账号最近 30 条记录含退出，仅正常结算可保存回放；跨账号共享文件在所有参与账号均失去资格后清理。回放 HTTP 增加 owner 查询参数和账号范围能力密钥，旧接口及匿名分享继续兼容。72 小时限制取消，内容版本规则保留；已失效帧不恢复。

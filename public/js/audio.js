@@ -1,3 +1,4 @@
+import { sanitizeVoicePreferences, resolveVoiceLines } from '../../shared/voice.js';
 // Audio manager (Web Audio): BGM per phase, UI SFX, per-unit battle SFX, operator battle voice. Never throws.
 //
 // Sources: data/assets.json → audio (docs/ASSETS.md):
@@ -65,7 +66,6 @@
 // `bgmKeyFor(route, pub)` picks the track for the current screen/phase (main.js calls `audio.install()`,
 // which follows the store).
 
-import { sanitizeVoiceOverrides, voiceLangFor } from './voicePrefs.js';
 import { PHASE } from '../../shared/constants.js';
 import { mediaUrl } from './media.js';
 
@@ -525,7 +525,7 @@ export class AudioManager {
     this.voiceGate = new VoiceGate();
     this.voiceNode = null;    // { src, gain, url, token } of the line on air
     this.voiceToken = 0;
-    this.voiceOverrides = {};
+    this.voicePreferences = { voiceLanguage: 'cn', voiceOverrides: {} };
     this.voiceLang = 'cn';    // settings 语音语言: 'cn' (audio.voice) | 'jp' (audio.voiceJp, falling back to audio.voice)
     this.startVoiceDone = false; // 行动出发 of this field (the first operator deployed says it)
     this.uiVoices = 0;
@@ -657,6 +657,8 @@ export class AudioManager {
    * Set channel volumes (0..1) and mute.
    * @param {{ bgm?: number, sfx?: number, voice?: number, muted?: boolean }} v
    */
+  setVoicePreferences(value) { this.voicePreferences = sanitizeVoicePreferences(value); this.voiceLang = this.voicePreferences.voiceLanguage; }
+
   setVolumes(v) {
     const n = (x, d) => (Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : d);
     this.volumes = {
@@ -673,9 +675,8 @@ export class AudioManager {
    * line on air finishes in its own dub; the next one follows the setting.
    * @param {string} lang
    */
-  setVoiceLang(lang, overrides = this.voiceOverrides) {
-    this.voiceLang = lang === 'jp' ? 'jp' : 'cn';
-    this.voiceOverrides = sanitizeVoiceOverrides(overrides);
+  setVoiceLang(lang) {
+    this.setVoicePreferences({ ...this.voicePreferences, voiceLanguage: lang === 'jp' ? 'jp' : 'cn' });
   }
 
   _applyVolumes() {
@@ -929,25 +930,23 @@ export class AudioManager {
     try {
       if (!this.ctx || !this.voiceGain || this.volumes.muted || this.volumes.voice <= 0) return false;
       if (typeof charId !== 'string' || typeof slot !== 'string') return false;
-      // the chosen dub's line (settings 语音语言), with the Chinese file of the same name as its fallback (voiceLine)
-      const line = voiceLine(this.getManifest()?.audio, charId, slot, voiceLangFor(charId, this.voiceLang, this.voiceOverrides));
-      if (!line) return false;
+      const banks = resolveVoiceLines(this.getManifest(), charId, slot, this.voicePreferences);
+      const urls = banks.map((lines) => lines[Math.floor(Math.random() * lines.length)]);
+      const url = urls[0];
+      if (typeof url !== 'string' || !url) return false;
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const verdict = this.voiceGate.request(slot, o.unitKey ?? null, now);
       if (verdict === 'drop') return false;
       if (verdict === 'preempt') this._stopVoice();
       this.voiceGate.start(slot, o.unitKey ?? null, now);
       const token = ++this.voiceToken;
-      this._playVoice(line.url, token, o.volume, line.fallback);
+      this._playVoice(url, token, o.volume, urls.slice(1));
       return true;
     } catch (err) { this._warn('voice', err); return false; }
   }
 
-  /**
-   * Fetch/decode and start one voice line through the voice channel. `fallback`: the line to play instead when this one
-   * cannot be loaded (a JP file the host lacks → the Chinese file of the same name; voiceLine) — same token, same gate.
-   */
-  _playVoice(url, token, volume, fallback = null) {
+  /** Fetch/decode and start one voice line through the voice channel. */
+  _playVoice(url, token, volume, fallbacks = []) {
     // `token` is the line's own `voiceToken`. Every deferred step below — the decode, a failed fetch, `onended` and the
     // safety timer — can land AFTER this line was taken over or stopped: `voiceToken` has moved on and the channel then
     // belongs to the line that replaced it. So each step re-checks its token and, when it is stale, touches NOTHING:
@@ -956,7 +955,7 @@ export class AudioManager {
     // on #73).
     const failed = () => {
       if (token !== this.voiceToken) return;   // taken over / stopped meanwhile: not ours to release
-      if (fallback && fallback !== url && this.ctx && this.voiceGain) this._playVoice(fallback, token, volume);
+      if (fallbacks.length && this.ctx && this.voiceGain) this._playVoice(fallbacks[0], token, volume, fallbacks.slice(1));
       else this.voiceGate.release();
     };
     this._buffer(url).then((buf) => {
@@ -1171,7 +1170,7 @@ export function installAudio(deps) {
   try {
     manifestGetter = typeof deps?.getManifest === 'function' ? deps.getManifest : manifestGetter;
     audio.install();
-    if (deps?.settings) { audio.setVolumes(deps.settings); audio.setVoiceLang(deps.settings.voiceLang, deps.settings.voiceOverrides); }
+    if (deps?.settings) { audio.setVolumes(deps.settings); audio.setVoicePreferences(deps.settings); }
     if (typeof deps?.subscribe === 'function' && typeof deps?.getState === 'function') {
       const sync = (s) => {
         try {

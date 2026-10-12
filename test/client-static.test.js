@@ -454,6 +454,40 @@ describe('net.js', () => {
     assert.equal(ws().last('hello').token, undefined);
   });
 
+  test('switching pseudo accounts discards old queued avatar writes before the next welcome', async () => {
+    const { net, ws, timers } = await onlineNet(); ws().drop();
+    const edit = net.request('profile.avatar', { avatar: { kind: 'default' } });
+    const rejected = assert.rejects(edit, (e) => e.code === 'OFFLINE');
+    const changes = []; net.on('profileChanging', (msg) => changes.push(msg.name)); net.setName('博士#0002');
+    await rejected; assert.equal(net.pendingCount, 0); assert.deepEqual(changes, ['博士#0002']);
+    timers.advance(2000); ws().open();
+    ws().recv({ t: 'welcome', playerId: 'p_new', name: '博士', doctorCode: '0002', avatar: { kind: 'default' }, serverNow: timers.now() });
+    assert.equal(ws().sent.some((m) => m.t === 'profile.avatar'), false); net.close();
+  });
+
+  test('switching pseudo accounts cancels queued social operations and replies', async () => {
+    const { net, ws, timers } = await onlineNet(); ws().drop();
+    const add = net.request('social.add', { identity: '好友#0001' });
+    const reject = assert.rejects(add, (e) => e.code === 'OFFLINE');
+    net.setName('博士#0002'); await reject; assert.equal(net.pendingCount, 0);
+    timers.advance(2000); ws().open();
+    ws().recv({ t: 'welcome', playerId: 'p_new', name: '博士', doctorCode: '0002', serverNow: timers.now() });
+    assert.equal(ws().sent.some((m) => m.t === 'social.add'), false); net.close();
+  });
+
+  test('online owner consent extends hello waiting without reconnecting or flushing game intents', async () => {
+    const { net, ws, timers, sockets } = await makeNet();
+    net.setName('博士#0001'); ws().open();
+    const hello = ws().last('hello');
+    ws().recv({ t: 'profile.transferPending', rid: hello.rid, requestId: 'a'.repeat(32), serverNow: timers.now(), expiresAt: timers.now() + 30000 });
+    timers.advance(10000); assert.equal(net.status, 'handshaking'); assert.equal(sockets.length, 1);
+    assert.equal(net.send('g.ready', { ready: true }), false);
+    assert.equal(net.send('profile.transferCancel', { requestId: 'a'.repeat(32) }), true);
+    ws().recv({ t: 'error', rid: hello.rid, code: 'PROFILE_DENIED' });
+    assert.equal(net.status, 'connected'); assert.equal(net.lastError.code, 'PROFILE_DENIED');
+    assert.equal(net._helloTimer, null); timers.advance(5000); assert.equal(sockets.length, 1); net.close();
+  });
+
   test('request resolves on ok, rejects on error with ERR text', async () => {
     const { net, ws } = await onlineNet();
     const p1 = net.request('room.create', { mode: 'coop', difficulty: 'HARD' });
@@ -1306,128 +1340,5 @@ describe('multi-device & browser compatibility (static)', () => {
     assert.match(src, /touch-action: none/);
     assert.match(src, /width: max\(100%, var\(--tap-min\)\)/);
     assert.match(src, /--tap-min: 44px/);
-  });
-});
-
-describe('explicit local match recovery (#431)', () => {
-  async function recoveryPair() {
-    const { createIdentity } = await mod('net.js');
-    const local = memStorage(), hub = channelHub(), ownerSession = memStorage(), guestSession = memStorage();
-    const ownerChannel = hub.create();
-    const owner = createIdentity({ local, session: ownerSession, tabId: 'z-owner', channel: ownerChannel, queryMs: 5, now: () => 100 });
-    const guest = createIdentity({ local, session: guestSession, tabId: 'a-guest', channel: hub.create(), queryMs: 5, now: () => 200 });
-    await owner.init(); owner.saveToken('seat-owner'); owner.rememberMatch({ name: 'Owner', code: 'ROOM1' });
-    await guest.init(); guest.saveToken('seat-guest');
-    return { createIdentity, local, hub, ownerSession, guestSession, ownerChannel, owner, guest, id: guest.recoverable()[0].id };
-  }
-  test('live: a smaller tab id cannot reclaim an active seat', async () => {
-    const { guest, owner, id } = await recoveryPair();
-    assert.equal(await guest.resume(id), false);
-    assert.equal(guest.getToken(), 'seat-guest');
-    assert.equal(owner.getToken(), 'seat-owner');
-  });
-  test('reload: the original session wins over a recovery attempt during navigation', async () => {
-    const p = await recoveryPair();
-    p.ownerChannel.close();
-    assert.equal(await p.guest.resume(p.id), true, 'old document is gone');
-    const reloaded = p.createIdentity({ local: p.local, session: p.ownerSession, tabId: 'zz-reloaded', channel: p.hub.create(), queryMs: 5 });
-    assert.equal(await reloaded.init(), 'seat-owner');
-    assert.equal(p.ownerSession.getItem('sp.token'), 'seat-owner');
-    assert.equal(p.guest.getToken(), 'seat-guest', 'unconfirmed recovery yields before hello');
-  });
-  test('midInit: the session token answers claims before init finishes', async () => {
-    const p = await recoveryPair();
-    p.ownerChannel.close();
-    let finish;
-    const reloaded = p.createIdentity({ local: p.local, session: p.ownerSession, tabId: 'zz-reloaded', channel: p.hub.create(), setTimeout: (fn) => { finish = fn; } });
-    const pending = reloaded.init();
-    assert.equal(await p.guest.resume(p.id), false);
-    finish();
-    assert.equal(await pending, 'seat-owner');
-    assert.equal(p.ownerSession.getItem('sp.token'), 'seat-owner');
-    assert.equal(p.guest.getToken(), 'seat-guest');
-  });
-  test('an occupied session token never falls back to a different recent identity', async () => {
-    const p = await recoveryPair();
-    p.local.setItem('sp.tokens', JSON.stringify(['seat-free', 'seat-owner']));
-    const duplicate = p.createIdentity({ local: p.local, session: p.ownerSession.clone(), tabId: '0-copy', channel: p.hub.create(), queryMs: 5 });
-    assert.equal(await duplicate.init(), null);
-    assert.equal(duplicate.getToken(), null);
-  });
-  test('resume persists neither its token nor a welcome stamp until the server welcomes it', async () => {
-    const p = await recoveryPair();
-    p.ownerChannel.close();
-    const stamp = p.guestSession.getItem('sp.tokenWelcome');
-    assert.equal(await p.guest.resume(p.id), true);
-    assert.equal(p.guestSession.getItem('sp.token'), 'seat-guest');
-    assert.equal(p.guestSession.getItem('sp.tokenWelcome'), stamp);
-    p.guest.saveToken('seat-owner');
-    assert.equal(p.guestSession.getItem('sp.token'), 'seat-owner');
-    assert.ok(p.guestSession.getItem('sp.tokenWelcome'));
-  });
-  test('an earlier welcome stamp survives reload and beats a later live welcome', async () => {
-    const p = await recoveryPair();
-    p.ownerChannel.close();
-    assert.equal(await p.guest.resume(p.id), true);
-    p.guest.saveToken('seat-owner'); // recovery's welcome is later than the original owner's
-    const originalStamp = p.ownerSession.getItem('sp.tokenWelcome');
-    const reloaded = p.createIdentity({ local: p.local, session: p.ownerSession, tabId: 'zz-reloaded', channel: p.hub.create(), queryMs: 5, now: () => 300 });
-    assert.equal(await reloaded.init(), 'seat-owner');
-    reloaded.saveToken('seat-owner');
-    assert.equal(p.ownerSession.getItem('sp.tokenWelcome'), originalStamp, 'reconnect does not reset seniority');
-  });
-  test('a welcome received during init cannot be overwritten or erased by its pending result', async () => {
-    const { createIdentity } = await mod('net.js');
-    const local = memStorage(), session = memStorage(), hub = channelHub();
-    session.setItem('sp.token', 'old');
-    let finish;
-    const id = createIdentity({ local, session, channel: hub.create(), setTimeout: (fn) => { finish = fn; } });
-    const pending = id.init();
-    id.saveToken('new'); finish();
-    assert.equal(await pending, 'new');
-    assert.equal(session.getItem('sp.token'), 'new');
-  });
-  test('an idle tab can reclaim a closed match tab without taking a live one', async () => {
-    const { createIdentity } = await mod('net.js');
-    const local = memStorage(), hub = channelHub(), ca = hub.create(), cb = hub.create();
-    const a = createIdentity({ local, session: memStorage(), tabId: 'a', channel: ca, queryMs: 5 });
-    const b = createIdentity({ local, session: memStorage(), tabId: 'b', channel: cb, queryMs: 5 });
-    await a.init(); a.saveToken('idle-token');
-    await b.init(); b.saveToken('match-token'); b.rememberMatch({ name: 'Doctor B', code: 'ABC123' });
-    const [item] = a.recoverable();
-    assert.equal(item.name, 'Doctor B');
-    assert.equal(JSON.stringify(item).includes('match-token'), false);
-    assert.equal(await a.resume(item.id), false, 'live original keeps its seat');
-    assert.equal(a.getToken(), 'idle-token');
-    cb.close();
-    assert.equal(await a.resume(item.id), true);
-    assert.equal(a.getToken(), 'match-token');
-    a.rememberMatch(null);
-    assert.deepEqual(JSON.parse(local.getItem('sp.matches')), {});
-    ca.close();
-  });
-  test('simultaneous recoveries pick one winner; absent channels and unknown ids cannot recover', async () => {
-    const { createIdentity } = await mod('net.js');
-    const local = memStorage(), hub = channelHub();
-    local.setItem('sp.tokens', JSON.stringify(['idle-b', 'idle-a']));
-    const sa = memStorage(), sb = memStorage(); sa.setItem('sp.token', 'idle-a'); sb.setItem('sp.token', 'idle-b');
-    const a = createIdentity({ local, session: sa, tabId: 'a', channel: hub.create(), queryMs: 5 });
-    const b = createIdentity({ local, session: sb, tabId: 'b', channel: hub.create(), queryMs: 5 });
-    await Promise.all([a.init(), b.init()]);
-    const closed = createIdentity({ local, session: memStorage(), channel: null });
-    closed.saveToken('closed-token'); closed.rememberMatch({ name: 'C', code: 'XYZ' });
-    const id = a.recoverable()[0].id;
-    assert.deepEqual(await Promise.all([a.resume(id), b.resume(id)]), [true, false]);
-    assert.equal(await b.resume('unknown'), false);
-    assert.equal(await closed.resume(id), false);
-  });
-  test('server replacement clears expired metadata and malformed storage remains safe', async () => {
-    const { createIdentity } = await mod('net.js');
-    const local = memStorage(); const a = createIdentity({ local, session: memStorage(), channel: null });
-    a.saveToken('old'); a.rememberMatch({ name: 'D', code: 'AAA' }); a.saveToken('new');
-    assert.deepEqual(a.recoverable(), []);
-    for (const bad of ['null', '[]', '{', '"hello"']) {
-      local.setItem('sp.matches', bad); assert.deepEqual(a.recoverable(), []);
-    }
   });
 });

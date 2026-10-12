@@ -1,10 +1,10 @@
 // Operator loadout + ownership + 自选编队 state and server sync (DESIGN §16; 干员持有 — 0.2.0 补位; 自选编队 — 0.2.0 DIY).
 //
-// `loadoutStore` holds the per-browser loadout (`entries`, persisted in localStorage through store.js savePref), the
+// `loadoutStore` holds the current account loadout (`entries`, persisted in localStorage through store.js savePref), the
 // per-browser not-owned list of the 干员持有 tab (`notOwned`, likewise), the 自选编队 picks (`diy`, likewise; with
 // `diyKitted` = the operators the server lets a DIY slot field, from every `welcome`) and the overlay's screen state
 // (open / origin / tab / selection / filters). `installLoadoutSync()` / `installOwnershipSync()` / `installDiySync()`
-// (called once by main.js) keep the server's copies current — one sync engine (installPrefSync), three settings: after
+// (legacy adapters retained for tests/embedders; main.js uses profilePreferences.js) keep the server's copies current — one sync engine (installPrefSync), three settings: after
 // every `welcome` (new or resumed
 // session — the server keeps them on the session and on the seat, so joining a room needs no resend) and after every
 // edit (debounced; a pending edit goes out at once when the overlay closes), they send `room.loadout { entries, ops }`

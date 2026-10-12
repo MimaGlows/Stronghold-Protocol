@@ -15,7 +15,7 @@ import {
   loadStats, saveStats, migrateStats, normalizeRecord, importStats, exportStats, aggregateStats, selfRowOf, roomModeOf,
   recordToResult, compactRecord, fitToBudget, countsTowardStats, roundsOf, clearedRounds, createLiveMatch, observeMatch,
   buildQuitRecord, installStatsRecorder, liveMatch, MIGRATIONS,
-} from '../../public/js/ui/stats.js';
+} from '../helpers/legacyStats.js';
 import { createStore, emptyMatch } from '../../public/js/store.js';
 import { normalizeResult } from '../../public/js/ui/gameLogic.js';
 import { PHASE } from '../../shared/constants.js';

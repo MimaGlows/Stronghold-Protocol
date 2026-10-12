@@ -10,8 +10,10 @@
 // entry/loading illustration names) it is layered under the CSS art; otherwise the screen is
 // pure CSS/SVG (radar, ridgelines, glow), so it never issues a request that can 404.
 
-import { ResumeMatchButton } from '../ui/resumeMatch.js';
-import { useMemo, useState } from '../../vendor/hooks.module.js';
+import { ContinueMatchButton } from '../ui/continueMatch.js';
+import { HostingCredit } from '../ui/hostingCredit.js';
+import { requestInvitePermissionOnGesture } from '../ui/social.js';
+import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { NAME_MAX_LEN, APP_VERSION, DEV_BUILD } from '../../../shared/constants.js';
 import { html, Button, Icon, MicroLabel, TextField, PingPill } from '../ui/components.js';
 import { GuideButton } from '../ui/guide.js';
@@ -26,6 +28,7 @@ import { t, N_ } from '../../../shared/i18n.js';
 import { scriptOf } from '../../../shared/i18nPacks.js';
 import { GIcon } from '../ui/gameComponents.js';
 import { SettingsModal } from '../ui/settings.js';
+import { doctorIdentity } from '../../../shared/doctor.js';
 
 // Same character classes as server/net.js sanitizeName (control, zero-width, bidi, BOM), so a name
 // the client accepts is never rejected by the server's hello validation.
@@ -75,8 +78,13 @@ export const isValidName = (raw) => sanitizeName(raw).length > 0;
  * @param {string} rawName
  * @returns {boolean} false when the name is invalid
  */
+export function sanitizeDoctorName(rawName) {
+  const raw = String(rawName ?? ''), hash = raw.lastIndexOf('#');
+  const name = hash < 0 ? sanitizeName(raw) : `${sanitizeName(raw.slice(0, hash))}${raw.slice(hash)}`;
+  return doctorIdentity(name) ? name : '';
+}
 export function enterSession(rawName) {
-  const name = sanitizeName(rawName);
+  const name = sanitizeDoctorName(rawName);
   if (!name) return false;
   identity.saveName(name);
   identity.setEntered(true);
@@ -192,7 +200,25 @@ export function TitleScreen() {
   const conn = useStore((s) => s.connection, shallowEqual);
   const pendingJoin = useStore((s) => s.ui.pendingJoin);
   useLang(); // re-render on a language switch
-  const [name, setName] = useState(() => store.get().me.name || identity.loadName() || '');
+  const initial = doctorIdentity(identity.loadName() || store.get().me.name || '');
+  const [name, setName] = useState(() => initial?.name || ''), [code, setCode] = useState(() => initial?.code || '');
+  const [availability, setAvailability] = useState(null);
+  const storedName = useStore((s) => s.me.doctorCode ? `${s.me.name}#${s.me.doctorCode}` : s.me.name);
+  const previousStoredName = useRef(storedName);
+  useEffect(() => { if (previousStoredName.current === storedName) return; previousStoredName.current = storedName; const parsed = doctorIdentity(storedName); if (parsed) { setName(parsed.name); setCode(parsed.code || ''); } }, [storedName]);
+  useEffect(() => {
+    setAvailability(null); const base = sanitizeName(name);
+    if (!base || name.includes('#') || code && !/^\d{4}$/.test(code)) return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/profiles/availability?${new URLSearchParams({ name: base, code })}`, { signal: controller.signal, cache: 'no-store' });
+        if (!response.ok) throw new Error('profile lookup failed');
+        const result = await response.json(); if (!controller.signal.aborted) setAvailability(result);
+      } catch { if (!controller.signal.aborted) setAvailability({ unavailable: true }); }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [name, code]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const assetsSettled = useData('assets');
   const assets = data.get('assets');
@@ -208,10 +234,12 @@ export function TitleScreen() {
   // CSS ridgelines only when there is no ridge art (avoids a swap flash when the art arrives).
   const cssRidges = assetsSettled && (!ridges || ridgesFailed);
 
-  const valid = isValidName(name);
+  const fullName = `${name}${code ? '#' + code : ''}`;
+  const valid = !name.includes('#') && (!code || /^\d{4}$/.test(code)) && !!sanitizeDoctorName(fullName);
   const start = () => {
-    if (!valid) { toast(t('请输入博士代号'), 'warn'); return; }
-    enterSession(name);
+    if (!valid) { toast(t('请填写代号或代号#四位数字代码'), 'warn'); return; }
+    requestInvitePermissionOnGesture();
+    enterSession(fullName);
   };
 
   const online = conn.status === 'online' || conn.status === 'connected';
@@ -269,9 +297,15 @@ export function TitleScreen() {
           <${Icon} name="key" />
           <span>${t('收到同盟邀请')}</span><b class="num">${pendingJoin}</b><span class="t-lo">${t('· 输入代号后将自动加入')}</span>
         </div>` : null}
-        <${TextField} label=${t('博士代号')} micro="CALLSIGN" size="lg" icon="user" value=${name} maxLength=${NAME_MAX_LEN}
-          placeholder=${t('输入你的代号（最多 {NAME_MAX_LEN} 字）', { NAME_MAX_LEN })} autoFocus=${!touchUi}
-          onInput=${setName} onEnter=${start} />
+        <div class="title-identity">
+          <span class="field__label">${t('博士代号')}<span class="micro">CALLSIGN</span></span>
+          <div class="title-identity__inputs">
+            <${TextField} size="lg" icon="user" name="doctor-name" ariaLabel=${t('博士代号')} value=${name} maxLength=${NAME_MAX_LEN} placeholder=${t('博士代号')} autoFocus=${!touchUi} onInput=${setName} onEnter=${start} />
+            <span class="title-identity__hash" aria-hidden="true">#</span>
+            <${TextField} size="lg" name="doctor-code" ariaLabel=${t('博士代码')} value=${code} maxLength=${4} inputMode="numeric" pattern="[0-9]{4}" placeholder="0001" transform=${(v) => v.replace(/[^0-9]/g, '').slice(0, 4)} onInput=${setCode} onEnter=${start} />
+          </div>
+          <p class=${`title-identity__hint${availability?.nameExists ? ' t-gold' : ' t-lo'}`} role="status">${code && code.length !== 4 ? t('代码必须是四位数字') : availability?.codeExists ? t('完整代号重复，开始后将恢复已有档案') : availability?.nameExists ? t('代号重复，可用不同代码区分；留空将随机分配代码') : availability?.unavailable ? t('暂时无法检查重复，开始时由服务器确认') : t('代码可留空，服务器将随机分配四位数字')}</p>
+        </div>
         <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" disabled=${!valid} onClick=${start}>${t('开始')}<//>
         <div class="title-conn">
           <span class=${`status-dot ${dotClass}`}></span>
@@ -288,7 +322,8 @@ export function TitleScreen() {
     <${SettingsModal} open=${settingsOpen} onClose=${() => setSettingsOpen(false)} />
 
     <footer class="title-foot">
-      <${ResumeMatchButton} />
+      <${HostingCredit} />
+      <${ContinueMatchButton} onResume=${enterSession} />
       <${PwaInstallButton} />
       <span>${t('非官方同人复刻 · 游戏素材版权归 上海鹰角网络 / Yostar 所有')}</span>
       <${MicroLabel}>v${APP_VERSION} · WEB SIMULATION<//>

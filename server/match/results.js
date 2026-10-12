@@ -111,7 +111,7 @@ export function buildResult(m, outcome) {
     return {
       playerId: ps.playerId,
       seat: ps.seat,
-      name: ps.name,
+      name: ps.name, ...(ps.doctorCode ? { doctorCode: ps.doctorCode } : {}),
       isBot: ps.isBot,
       left: ps.left,
       alive: ps.alive,

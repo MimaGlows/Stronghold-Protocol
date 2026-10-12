@@ -250,13 +250,13 @@ export function tempReadyReason(priv) {
  * under it (not only on hover): "临时整备区 N 个单位待处理" (user playtest #3 item 3), "请先完成教鞭选择".
  * @param {{ priv:any, onToggle:(ready:boolean)=>void, busy?:boolean, readyCount?:number, total?:number }} props
  */
-export function ReadyToggle({ priv, onToggle, busy, readyCount, total }) {
+export function ReadyToggle({ priv, onToggle, busy, readyCount, total, readOnly = false }) {
   const ready = !!priv?.ready;
   const temp = tempInfo(priv);
   const choice = !!priv?.personalChoice;
   const reason = !ready ? (choice ? shopBlockReason('ready', { priv, editable: true }) : tempReadyReason(priv) || shopBlockReason('ready', { priv, editable: true })) : null;
   const why = !ready && (choice || temp.count > 0);
-  const btn = html`<button type="button" class=${cx('readybtn', 'tapx', ready && 'is-on', busy && 'is-busy')} disabled=${!!reason || busy}
+  const btn = html`<button type="button" class=${cx('readybtn', 'tapx', ready && 'is-on', busy && 'is-busy')} disabled=${!!reason || busy || readOnly}
       aria-pressed=${ready ? 'true' : 'false'} aria-describedby=${why ? 'readywrap-why' : undefined} onClick=${() => onToggle(!ready)}>
     <span class="readybtn__box">${ready ? html`<${Icon} name="check" />` : null}</span>
     <span class="readybtn__label">${ready ? t('取消准备') : t('准备就绪')}</span>
@@ -356,7 +356,7 @@ export function PauseButton({ paused, busy = false, onToggle }) {
  *     `left` (a leaker in 联防): its enemies still standing — the capsule's ×N tag
  */
 export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
-  config = null, frozenAt = null, pause = null, live = null, spectator = false,
+  config = null, frozenAt = null, pause = null, live = null, spectator = false, replay = false,
   spectators = null, myId = null, isHost = false, onRemoveSpectator = null }) {
   const phase = pub?.phase;
   const boss = isBossPhase(phase);
@@ -384,7 +384,7 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
       <${Button} variant="danger" size="lg" square=${true} icon="exit" onClick=${onExit} aria-label=${t('离开')} title=${t('离开 / 暂离')} class="gtop__exit tapx" />
       <div class="gtop__meta">
         <div class="gtop__net">
-          <${PingPill} ms=${conn?.ping} online=${conn?.status === 'online'} />
+          ${replay ? html`<span class="ping ping--low replay-label">${t('回放')}</span>` : html`<${PingPill} ms=${conn?.ping} online=${conn?.status === 'online'} />`}
           <${SpectatorPill} spectators=${spectators} myId=${myId} isHost=${isHost} onRemove=${onRemoveSpectator} />
         </div>
         ${pub?.difficulty ? html`<${DifficultyTag} difficulty=${pub.difficulty} size="sm" />` : null}
@@ -412,12 +412,12 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
     <div class="gtop__right">
       <div class="gtop__clock">
         ${frozenSecs != null
-          ? html`<${Countdown} seconds=${frozenSecs} total=${total ?? undefined} size="md" label="PAUSED" />`
+          ? html`<${Countdown} seconds=${frozenSecs} total=${total ?? undefined} size="md" label=${replay ? "REPLAY" : "PAUSED"} />`
           : html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />`}
         ${pause && (pause.show || pause.paused) ? html`<${PauseButton} paused=${!!pause.paused} busy=${pause.busy} onToggle=${pause.onToggle} />` : null}
       </div>
       <${OvertimeWarning} ot=${ot} />
-      ${showReady ? html`<${ReadyToggle} priv=${priv} onToggle=${onReady} busy=${readyBusy} readyCount=${readyCount} total=${playerCount} />` : null}
+      ${showReady ? html`<${ReadyToggle} priv=${priv} onToggle=${onReady} busy=${readyBusy} readyCount=${readyCount} total=${playerCount} readOnly=${replay} />` : null}
     </div>
   </header>`;
 }

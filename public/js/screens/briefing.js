@@ -22,10 +22,13 @@ import { t, tParts } from '../../../shared/i18n.js';
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 /** INFO_CHECK screen. */
-export function BriefingScreen() {
-  const pub = useStore((s) => s.match.public);
-  const priv = useStore((s) => s.match.private);
-  const myId = useStore((s) => s.me.playerId);
+export function BriefingScreen({ replay = null } = {}) {
+  const livePub = useStore((s) => s.match.public);
+  const pub = replay?.pub || livePub;
+  const livePriv = useStore((s) => s.match.private);
+  const priv = replay?.priv || livePriv;
+  const liveId = useStore((s) => s.me.playerId);
+  const myId = replay?.myId || liveId;
   const solo = useStore((s) => s.room?.mode === 'solo') || String(pub?.modeId || '').includes('single');
   const gd = useGameData();
   const [exit, setExit] = useState(false);
@@ -49,7 +52,7 @@ export function BriefingScreen() {
   const m = gd.m;
 
   const ready = async () => {
-    if (busy || me?.ready) return;
+    if (replay || busy || me?.ready) return;
     setBusy(true);
     await actions.infoReady(pub.setupRevision ?? 0);
     setBusy(false);
@@ -58,7 +61,7 @@ export function BriefingScreen() {
   return html`<div class="screen brief">
     <div class="brief__bg" aria-hidden="true"></div>
     <${StepHeader} step=${1} of=${2} title=${t('确认本局信息')} micro="BRIEFING // INFO CHECK" pub=${pub}
-      total=${phaseTotalSeconds(pub, gd.config)} onExit=${() => setExit(true)} />
+      total=${phaseTotalSeconds(pub, gd.config)} replay=${replay} onExit=${replay?.onExit || (() => setExit(true))} />
     <main class="brief__main">
       <section class="brief__left">
         <div class="brief-boss brackets">
@@ -94,13 +97,13 @@ export function BriefingScreen() {
     </main>
     <${SetupReroll} pub=${pub} />
     <footer class="brief__foot">
-      <${LoadoutButton} from="briefing" size="lg" class="brief-loadout" />
+      ${!replay ? html`<${LoadoutButton} from="briefing" size="lg" class="brief-loadout" />` : null}
       <div class="brief-ready">
         <span class="brief-ready__txt">${t('已就绪')} <b class="num">${readyN}</b><span class="num">/${players.length}</span></span>
         <span class="brief-ready__pips">${players.map((p) => html`<i key=${p.playerId} class=${cx(p.ready && 'on', p.playerId === myId && 'me')} title=${p.name}><${Icon} name="user" /></i>`)}</span>
       </div>
       <${Button} variant="primary" size="xl" icon=${me?.ready ? 'check' : me ? 'play' : 'eye'} active=${!!me?.ready} loading=${busy}
-        disabled=${!!me?.ready || !me || !!pub.rerollVote} onClick=${ready}>${me?.ready ? t('已就绪') : me ? t('准备就绪') : t('观战中')}<//>
+        disabled=${!!replay || !!me?.ready || !me || !!pub.rerollVote} onClick=${ready}>${me?.ready ? t('已就绪') : me ? t('准备就绪') : t('观战中')}<//>
     </footer>
     <${ExitModal} open=${exit} onClose=${() => setExit(false)} solo=${solo} />
   </div>`;

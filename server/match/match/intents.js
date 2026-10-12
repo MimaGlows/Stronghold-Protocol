@@ -1,3 +1,4 @@
+import { sendCommunication } from '../communications.js';
 // server/match/match/intents.js — Match methods: the g.* / b.* intent router (_handle: the prep intents go to
 // PlayerState, the drafts, watching, the pause and the battle reports to the match), emotes, AI 托管 (setAutoplay,
 // kickBot) and g.unitStats (the stats the board's units start their next battle with: a preview battle, started, read
@@ -40,6 +41,7 @@ export class MatchIntents {
         : this.pickCard(ps, msg.idx);
       case 'g.ready': return ps.setReady(!!msg.ready);
       case 'g.emote': return this.emote(ps, msg.id);
+      case 'g.ping': case 'g.radio': return sendCommunication(this, ps, msg);
       // playerId: the player tapped (a shared field names two) — the watch preference (item 56)
       case 'g.watch': return this.watch(ps, msg.fieldId, msg.playerId ?? null);
       case 'g.autoplay': return this.setAutoplay(ps, !!msg.on);

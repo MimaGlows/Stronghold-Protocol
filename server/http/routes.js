@@ -8,11 +8,17 @@
 //   * everything else → the static files (static.js).
 // A route that throws is logged and answers 500.
 
+import { gzipSync } from 'node:zlib';
 import { PROTOCOL_VERSION, APP_VERSION } from '../../shared/constants.js';
 import { buildTag } from './buildTag.js';
 import { setSecurityHeaders, sendError, sendJson, splitUrl } from './common.js';
+import { doctorIdentity } from '../../shared/doctor.js';
 
 const MAX_URL_LENGTH = 4096;
+function replayOptions(q) {
+  const number = (key) => q.has(key) && /^\d{1,6}$/.test(q.get(key)) ? Number(q.get(key)) : null;
+  return { summaryOnly:q.get('summary')==='1',tracks:q.get('tracks')==='1',field:number('field'),chunk:number('chunk') };
+}
 
 /**
  * The GET /healthz body.
@@ -36,7 +42,7 @@ export function healthReport({ startedAt, network, registry, lobby }) {
  *           health: Parameters<typeof healthReport>[0], log: object }} deps
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log }) {
+export function createRequestHandler({ serveStatic, replays = null, health, log }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
@@ -50,6 +56,41 @@ export function createRequestHandler({ serveStatic, health, log }) {
     if (parts.rawPath === '/healthz') {
       sendJson(req, res, 200, healthReport(health));
       return;
+    }
+    if (parts.rawPath === '/api/profiles/active-match') {
+      const identity = doctorIdentity(new URLSearchParams(parts.query).get('identity'));
+      const session = identity?.code && health.lobby.profileMatchSession(identity.name, identity.code);
+      const room = session && health.lobby.roomOf(session);
+      const player = room?.match?.players.get(session.playerId);
+      sendJson(req, res, 200, { active: !!player && !player.left && !room.match.ended }); return;
+    }
+    if (parts.rawPath === '/api/profiles/availability') {
+      const q = new URLSearchParams(parts.query), code = q.get('code') || '', name = q.get('name') || '';
+      const identity = doctorIdentity(`${name}${code ? '#' + code : ''}`);
+      if (!identity || name.includes('#') || !health.lobby.profiles) { sendError(req, res, 400, '博士代号无效 · Invalid callsign'); return; }
+      sendJson(req, res, 200, health.lobby.profiles.availability(identity.name, identity.code)); return;
+    }
+    if (parts.rawPath === '/api/social-history') {
+      const q=new URLSearchParams(parts.query),token=String(req.headers.authorization||'').replace(/^Bearer /,'');
+      const result=health.lobby.social?.history(token,q.get('identity'),q.get('id'),{...replayOptions(q),offset:q.get('offset')});
+      if(!result || result.status!==200){sendError(req,res,result?.status||404,'资料不可访问 · Profile unavailable');return;}
+      const body=Buffer.from(JSON.stringify(result.body)),zipped=/\bgzip\b/.test(String(req.headers['accept-encoding']||''));
+      const content=zipped?gzipSync(body):body;
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding',...(zipped?{'Content-Encoding':'gzip'}:{}),'Content-Length':content.length});
+      res.end(req.method==='HEAD'?undefined:content);return;
+    }
+    if (parts.rawPath.startsWith('/api/replays/') || parts.rawPath.startsWith('/api/shared-replays/')) {
+      const shared = parts.rawPath.startsWith('/api/shared-replays/');
+      const id = parts.rawPath.slice('/api/replays/'.length), key = String(req.headers.authorization || '').replace(/^Bearer /, '');
+      const q = new URLSearchParams(parts.query);
+      const options = replayOptions(q);
+      const record = shared ? replays?.getShared(parts.rawPath.slice('/api/shared-replays/'.length), options) : (new URLSearchParams(parts.query).get('owner') ? replays?.getAccount?.(id, key, new URLSearchParams(parts.query).get('owner'), options) : replays?.get(id, key, options));
+      if (!record) { sendError(req, res, 404, '记录不存在或不可访问 · Record unavailable'); return; }
+      const body = Buffer.from(JSON.stringify({ ...record, serverNow: replays.now() })), zipped = /\bgzip\b/.test(String(req.headers['accept-encoding'] || ''));
+      const content = zipped ? gzipSync(body) : body;
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Vary': 'Accept-Encoding',
+        ...(zipped ? { 'Content-Encoding': 'gzip' } : {}), 'Content-Length': content.length });
+      res.end(req.method === 'HEAD' ? undefined : content); return;
     }
     await serveStatic(req, res, parts.rawPath, parts.query);
   }

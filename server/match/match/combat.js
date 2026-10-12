@@ -15,7 +15,9 @@ export class MatchCombat {
   newBattle(opts) {
     const full = { data: this.ds, content: this.battleContent, logger: this.log, ...opts };
     try {
-      return new this.BattleClass(full);
+      const battle = new this.BattleClass(full);
+      this.recorder?.safe(() => this.recorder.serverBattle(opts, battle));
+      return battle;
     } catch (e) {
       this.reportError(`battle ${opts.fieldId} construct`, e);
       return new DeadBattle(full, 'forced');

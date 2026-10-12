@@ -202,6 +202,7 @@ export class MatchPlatform {
 
   dispose() {
     if (this.disposed) return;
+    this.recorder?.safe(() => this.recorder.abort());
     this.disposed = true;
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } }
     this._stopClientCombat();

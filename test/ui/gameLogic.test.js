@@ -696,8 +696,8 @@ describe('keyboard & settings', () => {
     assert.equal(shortcutFor({ key: 'd' }), 'levelUp');
     assert.equal(shortcutFor({ key: 'q', code: 'KeyQ' }), 'retreat');
     assert.equal(shortcutFor({ key: 'Q' }), 'retreat');
-    assert.equal(shortcutFor({ code: 'KeyX' }), 'sell');
-    assert.equal(shortcutFor({ key: 'X' }), 'sell');
+    assert.equal(shortcutFor({ code: 'KeyX' }), 'radio');
+    assert.equal(shortcutFor({ key: 'X' }), 'radio');
     for (const key of ['q', 'x']) {
       assert.equal(shortcutFor({ key, repeat: true }), null);
       assert.equal(shortcutFor({ key, ctrlKey: true }), null);
@@ -717,20 +717,19 @@ describe('keyboard & settings', () => {
     assert.equal(shortcutFor({ key: ' ', code: 'Space', target: { tagName: 'BUTTON' } }), 'ready', 'space readies even with a HUD button focused');
     assert.equal(shortcutFor({ key: ' ', code: 'Space', target: { tagName: 'TEXTAREA' } }), null);
     assert.equal(shortcutFor({ key: 'd', target: { tagName: 'DIV', isContentEditable: true } }), null);
-    assert.equal(shortcutFor({ key: 'z' }), null);
+    assert.equal(shortcutFor({ key: 'z' }), 'ping');
     assert.equal(shortcutFor(null), null);
   });
   test('sanitizeSettings', () => {
     assert.deepEqual(sanitizeSettings(null), { ...DEFAULT_SETTINGS });
     assert.deepEqual(sanitizeSettings({ bgm: 3, sfx: -1, voice: 2, muted: 'yes', damageNumbers: false, quality: 'ultra' }),
-      { bgm: 1, sfx: 0, voice: 1, voiceLang: 'cn', voiceOverrides: {}, muted: false, damageNumbers: false, quality: 'high', textSize: 'sm', keys: { ...DEFAULT_SETTINGS.keys } },
+      { voiceLanguage: 'jp', voiceOverrides: {}, socialPrivacy: { ...DEFAULT_SETTINGS.socialPrivacy }, bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, quality: 'high', textSize: 'sm', keys: { ...DEFAULT_SETTINGS.keys } },
       'a saved profile without `keys` (before 0.2.0) gets the default key map (test/ui/feedback5-hotkeys.test.js)');
     assert.equal(sanitizeSettings({ bgm: 0.5 }).voice, DEFAULT_SETTINGS.voice, 'a saved profile without `voice` gets the default');
-    // 语音语言 (0.2.2): 中文 by default — a profile saved before it, or any other value, plays the Chinese dub
-    assert.equal(DEFAULT_SETTINGS.voiceLang, 'cn');
-    assert.equal(sanitizeSettings({ bgm: 0.5 }).voiceLang, 'cn');
-    assert.equal(sanitizeSettings({ voiceLang: 'jp' }).voiceLang, 'jp');
-    for (const bad of ['en', 'kr', 'JP', 'ja', 1, null]) assert.equal(sanitizeSettings({ voiceLang: bad }).voiceLang, 'cn', String(bad));
+    // Custom accounts retain their Japanese default and per-operator overrides.
+    assert.equal(DEFAULT_SETTINGS.voiceLanguage, 'jp');
+    assert.equal(sanitizeSettings({ voiceLang: 'cn' }).voiceLanguage, 'cn');
+    assert.equal(sanitizeSettings({ voiceLanguage: 'cn', voiceLang: 'jp' }).voiceLanguage, 'cn');
     assert.equal(sanitizeSettings({ bgm: 0.333 }).bgm, 0.33);
     assert.equal(sanitizeSettings({ quality: 'low' }).quality, 'low');
   });

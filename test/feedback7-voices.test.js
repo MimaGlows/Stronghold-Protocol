@@ -52,7 +52,7 @@ test('plan: audio.voiceJp is the JP dub (ArknightsAssets2 voice/) of the very sl
   assert.equal(jp.start.alts[0].rel, 'audio/voice/jp/char_263_skadi/cn_019.mp3');
   assert.equal(t.audio.voiceJp.char_602_cdfend, undefined, 'an operator the game does not field (a stand-in) gets neither tree');
   assert.equal(t.audio.voice.char_602_cdfend, undefined);
-  assert.deepEqual(Object.keys(t.audio), ['bgm', 'bossBgm', 'voice', 'voiceJp', 'sfx'], 'voiceJp right after voice');
+  assert.deepEqual(Object.keys(t.audio), ['bgm', 'bossBgm', 'voice', 'voices', 'voiceJp', 'sfx'], 'legacy voice aliases coexist with the official JP tree');
   // --voice-lang puts another dub in audio.voice; voiceJp stays the JP one; voiceJp: false plans no JP tree
   const en = plan({ voiceLang: 'en' });
   assert.equal(en.audio.voice.char_263_skadi.start.alts[0].rel, 'audio/voice/en/char_263_skadi/cn_019.mp3');
@@ -91,15 +91,16 @@ test('data/assets.json: voiceJp gives every voiced operator the JP twin of each 
   if (fs.existsSync(dir)) for (const u of lines) assert.ok(fs.statSync(path.join(ROOT, 'public', u)).size > 0, u);
 });
 
-test('settings 语音语言: 中文 by default, 日本語 kept, nothing else; the row is translated in every language pack', () => {
+test('custom account voice default and legacy upstream preference migration; every pack contains the voice row', () => {
   assert.deepEqual([...VOICE_LANGS], ['cn', 'jp']);
-  assert.equal(DEFAULT_SETTINGS.voiceLang, 'cn', 'not tied to the interface language: 中文 until the player picks 日本語');
-  assert.equal(sanitizeSettings({}).voiceLang, 'cn');
-  assert.equal(sanitizeSettings({ voiceLang: 'jp' }).voiceLang, 'jp');
-  assert.equal(sanitizeSettings({ voiceLang: 'en' }).voiceLang, 'cn', 'no English / Korean dub');
+  assert.equal(DEFAULT_SETTINGS.voiceLanguage, 'jp', 'preserve the existing customized default');
+  assert.equal(sanitizeSettings({}).voiceLanguage, 'jp');
+  assert.equal(sanitizeSettings({ voiceLang: 'cn' }).voiceLanguage, 'cn');
+  assert.equal(sanitizeSettings({ voiceLang: 'en' }).voiceLanguage, 'jp', 'no English / Korean dub');
   const ui = fs.readFileSync(path.join(ROOT, 'public/js/ui/settings.js'), 'utf8');
-  assert.match(ui, /updateSettings\(\{ voiceLang: id \}\)/);
-  assert.match(ui, /const VOICE_LANG_NAMES = \{ cn: '中文', jp: '日本語' \};/, 'each dub named in its own language');
+  assert.match(ui, /updateSettings\(\{ voiceLanguage: id \}\)/);
+  const operator = fs.readFileSync(path.join(ROOT, 'public/js/ui/operatorVoice.js'), 'utf8');
+  assert.match(operator, /voiceOverrides/, 'official roster selector retains account-owned operator overrides');
   for (const code of ['en', 'ja', 'ko', 'zh-TW']) {
     const pack = readJson(`public/i18n/${code}.json`);
     assert.ok(typeof pack['语音语言'] === 'string' && pack['语音语言'] && pack['语音语言'] !== '语音语言', `${code}: 语音语言`);

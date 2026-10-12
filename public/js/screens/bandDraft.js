@@ -18,6 +18,7 @@
 // a turn change (a pick, a skip, a turn that runs out, an AI pick) closes it, the end of the draft unmounts it, and it
 // never touches the highlighted band or the buttons.
 
+import { Communications } from '../ui/communications.js';
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Button, Icon, MicroLabel, useTicker, secondsLeft } from '../ui/components.js';
 import { useGameData, BandIcon, RichText, PlayerAvatar, LpTower, Sprite } from '../ui/gameComponents.js';
@@ -164,10 +165,13 @@ export function draftInfoStatus({ myPick = null, pickName = null, myTurn, turnNa
 }
 
 /** BAND_DRAFT screen. */
-export function BandDraftScreen() {
-  const pub = useStore((s) => s.match.public);
-  const priv = useStore((s) => s.match.private);
-  const myId = useStore((s) => s.me.playerId);
+export function BandDraftScreen({ replay = null } = {}) {
+  const livePub = useStore((s) => s.match.public);
+  const pub = replay?.pub || livePub;
+  const livePriv = useStore((s) => s.match.private);
+  const priv = replay?.priv || livePriv;
+  const liveId = useStore((s) => s.me.playerId);
+  const myId = replay?.myId || liveId;
   const roomSolo = useStore((s) => s.room?.mode === 'solo');
   const gd = useGameData();
   const [sel, setSel] = useState(null);
@@ -185,7 +189,7 @@ export function BandDraftScreen() {
   const myPick = draft.picks.get(myId) || priv?.bandId || null;
   const myTurn = !myPick && (solo || draft.turnPid === myId);
   const skipsLeft = draft.skipsLeft.has(myId) ? draft.skipsLeft.get(myId) : (skipped ? 0 : 1);
-  const canSkip = !solo && myTurn && skipsLeft > 0 && draft.order.length > 1;
+  const canSkip = !replay && !solo && myTurn && skipsLeft > 0 && draft.order.length > 1;
   const taken = solo ? new Map() : teammateBands(draft.picks, myId);
   const pickers = new Map(); // bandId → players
   for (const [pid, bid] of draft.picks) {
@@ -216,7 +220,7 @@ export function BandDraftScreen() {
   const focusSent = useRef(null);
   useEffect(() => {
     // (a spectator seat — community report #26 — is in no draft order: it never reports)
-    if (!timed || myPick || !sel || focusSent.current === sel || !draft.order.includes(myId)) return;
+    if (replay || !timed || myPick || !sel || focusSent.current === sel || !draft.order.includes(myId)) return;
     focusSent.current = sel;
     act('g.bandFocus', { bandId: sel }, { sfx: false, quiet: true });
   }, [sel, timed, myPick]);
@@ -228,7 +232,7 @@ export function BandDraftScreen() {
   const band = sel ? gd.band(sel) : null;
   const selTaken = !!band && taken.has(band.bandId);
   const confirm = async () => {
-    if (!band || busy || !myTurn || selTaken) return;
+    if (replay || !band || busy || !myTurn || selTaken) return;
     setBusy('pick');
     await actions.band(band.bandId);
     setBusy(null);
@@ -242,7 +246,7 @@ export function BandDraftScreen() {
   const turnName = players.find((p) => p.playerId === draft.turnPid)?.name;
   useTicker(clock ? 250 : 0);
   // the picker's row shows the step header's number (both read the one turn deadline)
-  const turnSecs = clock ? secondsLeft(clock.deadline) : null;
+  const turnSecs = clock ? replay ? Math.max(0, Math.ceil((clock.deadline - replay.frozenAt) / 1000)) : secondsLeft(clock.deadline) : null;
   const turnLen = Number(pub?.draft?.turnSeconds) > 0 ? Math.round(pub.draft.turnSeconds) : null;
   // 本局信息: the briefing's blocks (built only while the dialog is open) and the draft's state under it
   const info = infoOpen ? matchInfoModel(pub, { bonds: gd.list('bonds'), chess: gd.chess, mode, priv, diyData: { chess: data.get('chess'), backups: data.get('backups') } }) : null;
@@ -252,7 +256,7 @@ export function BandDraftScreen() {
   return html`<div class="screen draft">
     <div class="brief__bg" aria-hidden="true"></div>
     <${StepHeader} step=${2} of=${2} title=${t('选择策略')} micro="STRATEGY // BAND CHECK" pub=${clock ? { ...pub, deadline: clock.deadline } : { ...pub, deadline: 0 }}
-      total=${clock ? clock.total : null} onExit=${() => setExit(true)} />
+      total=${clock ? clock.total : null} replay=${replay} onExit=${replay?.onExit || (() => setExit(true))} />
     <main class="draft__main">
       <aside class="draft-order">
         <h3 class="brief-h"><span>${solo ? t('独立模拟') : t('决策顺序')}</span><${MicroLabel}>${solo ? 'FREE PICK' : 'RANDOM ORDER'}</${MicroLabel}></h3>
@@ -286,7 +290,7 @@ export function BandDraftScreen() {
           const who = pickers.get(b.bandId) || [];
           const isTaken = taken.has(b.bandId);
           const offNames = bandOffBonds(b, offBonds).map((id) => gd.bond(id)?.name || id); // 本局禁用 (still selectable)
-          return html`<button key=${b.bandId} type="button" role="option" aria-selected=${sel === b.bandId ? 'true' : 'false'} data-band=${b.bandId}
+          return html`<button key=${b.bandId} type="button" role="option" aria-selected=${sel === b.bandId ? 'true' : 'false'} data-band=${b.bandId} data-comm=${!replay && !isTaken ? 'band-offer' : undefined}
               aria-disabled=${isTaken ? 'true' : 'false'} title=${isTaken ? t('队友已选') : offNames.length ? bandOffLine(offNames) : undefined}
               class=${cx('dband', sel === b.bandId && 'is-sel', myPick === b.bandId && 'is-mine', isTaken && 'is-taken', offNames.length && 'is-off')} onClick=${() => { setSel(b.bandId); audio.sfx('tab', { volume: 0.5 }); }}>
             <${BandIcon} bandId=${b.bandId} size="lg" />
@@ -319,11 +323,12 @@ export function BandDraftScreen() {
           <div class="draft-detail__btns">
             ${!solo ? html`<${Button} variant="secondary" size="lg" icon="chevrons" disabled=${!canSkip} loading=${busy === 'skip'} onClick=${skip}
               title=${skipsLeft > 0 ? t('跳过本轮，稍后再选') : t('跳过次数已用完')}>${t('跳过')}${skipsLeft > 0 ? '' : t('（已用）')}<//>` : null}
-            <${Button} variant="primary" size="lg" icon="check" disabled=${!myTurn || !band || selTaken} loading=${busy === 'pick'} onClick=${confirm}>${selTaken ? t('队友已选') : t('确认选择')}<//>
+            <${Button} variant="primary" size="lg" icon="check" disabled=${!!replay || !myTurn || !band || selTaken} loading=${busy === 'pick'} onClick=${confirm}>${selTaken ? t('队友已选') : t('确认选择')}<//>
           </div>
         </div>
       </aside>
     </main>
+    ${!replay ? html`<${Communications} pub=${pub} priv=${priv} myId=${myId} ownerId=${myId} spectator=${!players.some((p)=>p.playerId===myId)} onCloseEmote=${()=>{}} />` : null}
     <${ExitModal} open=${exit} onClose=${() => setExit(false)} solo=${solo} />
     <${MatchInfoDialog} open=${infoOpen} onClose=${() => setInfoOpen(false)} model=${info}
       status=${infoStatus ? html`<span class=${cx('minfo-dlg__turn', `is-${infoStatus.tone}`)}>

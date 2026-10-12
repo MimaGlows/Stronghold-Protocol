@@ -716,3 +716,23 @@
 .pauseov__plate h2 { font-size: calc(.5 * var(--t)); font-weight: 900; letter-spacing: .3em; color: #fff; text-shadow: 0 0 .2rem rgba(0, 0, 0, .8); }
 .pauseov__note { font-size: calc(.17 * var(--t)); color: var(--text-md); text-shadow: 0 1px 2px #000; }
 .pauseov__btns { display: flex; gap: .2rem; }
+
+/* Account-owned voice selection: compact controls share the native settings treatment. */
+.set-voice { border-block: 1px solid var(--line-2); padding: .14rem 0; }
+.set-voice__search { display: flex; align-items: center; gap: .12rem; font-size: .15rem; margin: .12rem 0; }
+.set-voice__search input { flex: 1; min-width: 0; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--text-hi); padding: .09rem; font: inherit; }
+.set-voice__results { max-height: 2.1rem; overflow-y: auto; }
+.set-voice__overrides { margin-top: .12rem; }
+.set-voice__overrides h3 { margin: .08rem 0; font-size: .15rem; color: var(--mint-500); }
+.set-voice__operator { display: flex; align-items: center; gap: .1rem; padding: .08rem 0; border-bottom: 1px solid var(--line-2); }
+.set-voice__name { flex: 1; min-width: 0; font-size: .15rem; }
+.set-voice__name small { display: block; font-size: .12rem; color: var(--text-lo); }
+.set-voice__choices { display: flex; flex-wrap: wrap; gap: .05rem; justify-content: flex-end; }
+.set-voice__choices button { min-height: .34rem; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--text-lo); padding: .05rem .08rem; font: inherit; font-size: .13rem; }
+.set-voice__choices button.is-on { background: var(--mint-500); color: var(--text-on-mint); }
+.set-voice__choices button:focus-visible, .set-voice__search input:focus-visible { outline: 2px solid var(--mint-500); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .set-voice__operator { flex-wrap: wrap; }
+  .set-voice__choices { width: 100%; justify-content: flex-start; }
+  .set-voice__search { flex-wrap: wrap; }
+}

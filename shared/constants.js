@@ -12,7 +12,7 @@ export const DEV_BUILD = /-dev$/.test(APP_VERSION);
 
 export const MAX_SEATS = 4;
 /**
- * Spectator seats of a co-op room (community report #26, owner's decision 2026-10-04) — a remake feature: the official
+ * Spectator seats of either room mode (co-op: community report #26; solo: social feature) — a remake feature: the official
  * room has 1–4 players and no spectator seat (there only eliminated players and 联防 bystanders watch, research 09 §3.1).
  * A spectator never counts as a player, may not act, and watches like an eliminated player (server/lobby.js spectate,
  * server/match/match/watch.js addSpectator).
@@ -148,6 +148,10 @@ export const ERR = Object.freeze({
   TEMP_NOT_EMPTY: 'TEMP_NOT_EMPTY',
   ELIMINATED: 'ELIMINATED',
   SPECTATOR: 'SPECTATOR',         // a spectator seat only watches (MAX_SPECTATORS)
+  PROFILE_BUSY: 'PROFILE_BUSY',
+  PROFILE_DENIED: 'PROFILE_DENIED',
+  PROFILE_TIMEOUT: 'PROFILE_TIMEOUT',
+  PROFILE_CANCELED: 'PROFILE_CANCELED',
   INTERNAL: 'INTERNAL',
 });
 
@@ -159,6 +163,8 @@ export const ERR_TEXT = {
   BAD_TILE: N_('无法部署在该位置'), BAD_TARGET: N_('无效的目标'), SOLD_OUT: N_('已售出'), MAX_LEVEL: N_('调度中心已达最高等级'),
   NOT_YOUR_TURN: N_('尚未轮到你'), ALREADY: N_('已完成该操作'), TEMP_NOT_EMPTY: N_('临时整备区不为空'), ELIMINATED: N_('你已被淘汰'),
   SPECTATOR: N_('观战中无法进行该操作'), INTERNAL: N_('服务器内部错误'),
+  PROFILE_BUSY: N_('该账号已有登录请求，请稍后重试'), PROFILE_DENIED: N_('旧窗口拒绝了接管请求'),
+  PROFILE_TIMEOUT: N_('旧窗口未在规定时间内同意，登录请求已过期'), PROFILE_CANCELED: N_('接管请求已取消，请重新登录'),
 };
 
 // ---- Emotes (交流, research 09 §4) -----------------------------------------------------------------------------

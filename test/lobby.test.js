@@ -543,7 +543,7 @@ describe('websocket lobby', () => {
     assert.equal(st.difficulty, 'HARD');
     assert.equal(st.inMatch, false);
     assert.equal(st.seats.length, MAX_SEATS);
-    assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', isBot: false, ready: false, connected: true });
+    assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', avatar: { kind: 'default' }, isBot: false, ready: false, connected: true });
     assert.deepEqual(st.seats.slice(1), [null, null, null]);
 
     const guest = await pool.player('Guest');
@@ -671,10 +671,11 @@ describe('websocket lobby', () => {
     await s5back.hello('Watcher5', s5.token);
     assert.equal((await s5back.waitFor('room.closed')).reason, 'kicked');
     await s5back.expectNone('room.state');
-    // solo rooms have no spectator seat; unknown codes
+    // Independent simulations now share the two read-only spectator seats; unknown codes still reject.
     const solo = await pool.player('Solo');
     const soloSt = await createRoom(solo, 'solo', 'FUNNY');
-    await expectError(s4, { t: 'room.spectate', code: soloSt.code }, ERR.ROOM_FULL);
+    await expectOk(s4, { t: 'room.spectate', code: soloSt.code });
+    assert.equal((await s4.waitFor('room.state', (s) => s.code === soloSt.code)).spectators.length, 1);
     await expectError(s4, { t: 'room.spectate', code: st.code === 'ZZZZ' ? 'YYYY' : 'ZZZZ' }, ERR.ROOM_NOT_FOUND);
     // a spectator never keeps a room alive: its last human leaving closes it for the spectator
     const lone = await pool.player('Lone');
@@ -877,7 +878,7 @@ describe('websocket lobby', () => {
     assert.equal(w.token, guest.token);
     const restored = await back.waitFor('room.state');
     assert.equal(restored.code, st.code);
-    assert.deepEqual(seatOf(restored, guest.id), { seat: 1, playerId: guest.id, name: 'Guest2', isBot: false, ready: true, connected: true });
+    assert.deepEqual(seatOf(restored, guest.id), { seat: 1, playerId: guest.id, name: 'Guest2', avatar: { kind: 'default' }, isBot: false, ready: true, connected: true });
     await host.waitFor('room.state', (s) => seatOf(s, guest.id)?.connected === true);
 
     // an unknown token just creates a new identity
@@ -997,6 +998,13 @@ describe('websocket lobby', () => {
       return pick([{ t: 'hello', name: pick(['Re', '', 'x'.repeat(20)]) }, { t: 'ping', c: pick([1, 'x']) }, { t: pick(['nope', '__proto__', 'toString']) }, { t: 'room.join', code: pick(junk) }]);
     };
     const okCounts = {};
+    // Deterministically exercise an accepted game intent before fuzzing. Extra solo spectator seats change the
+    // random room topology, so a fixed seed need not happen to send infoReady from a seated player anymore.
+    await expectOk(clients[0], { t: 'room.create', mode: 'coop', difficulty: 'FUNNY' });
+    await expectOk(clients[0], { t: 'room.start' });
+    await expectOk(clients[0], { t: 'g.infoReady' });
+    okCounts['g.infoReady'] = 1;
+    await expectOk(clients[0], { t: 'room.leave' });
     for (let i = 0; i < 500; i++) {
       const k = Math.floor(rnd() * clients.length);
       let c = clients[k];
@@ -1031,9 +1039,8 @@ describe('websocket lobby', () => {
         assert.ok(sess, 'seated session exists');
         assert.equal(sess.roomCode, room.code);
       }
-      // spectator seats: capped, none in solo rooms, never also a player (here or elsewhere), never the host
+      // Both room modes cap independent spectator seats; a spectator cannot also be a player or host.
       assert.ok(room.spectators.length <= MAX_SPECTATORS, `room ${room.code} spectator cap`);
-      if (room.mode === 'solo') assert.equal(room.spectators.length, 0, 'no spectator seat in a solo room');
       for (const sp of room.spectators) {
         assert.ok(!seen.has(sp.playerId), 'a spectator is seated (or spectating) twice');
         seen.add(sp.playerId);

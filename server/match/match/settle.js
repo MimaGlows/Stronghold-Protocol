@@ -137,6 +137,10 @@ export class MatchSettle {
       this.reportError('buildResult', e);
       result = { t: 'm.result', victory: !!victory, roundsPassed: 0, reason, modeId: this.modeId, difficulty: this.difficulty, players: [] };
     }
+    result.restrictions = this.recorder?.record.restrictions || { modeId: this.modeId, difficulty: this.difficulty, stageId: this.stageId,
+      factions: this.factions.slice(), disabledBonds: [...new Set([...this.disabledBonds, ...this.staticInactiveBonds])],
+      drawnDisabledBonds: this.disabledBonds.slice(), bannedChess: this.bannedChess.slice(), mode: this.gd.mode };
+    try { const ticket = this.recorder?.finish(result); if (ticket) result.replay = ticket; } catch (e) { this.reportError('recording', e); }
     this.lastResultMsg = result;
     this.markPublic();
     try { this.flush(true); } catch (e) { this.reportError('flush', e); }

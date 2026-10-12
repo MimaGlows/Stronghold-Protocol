@@ -1,3 +1,5 @@
+import { Communications } from '../ui/communications.js';
+import { prepSnapshot } from '../ui/prepSnapshot.js';
 // Game screen — every in-match screen, dispatched by m.public.phase (DESIGN §10):
 //   INFO_CHECK → Briefing (screens/briefing.js), BAND_DRAFT → Band draft (screens/bandDraft.js),
 //   RESULT / m.result → Result (screens/result.js), everything else → MatchScreen below.
@@ -175,6 +177,7 @@ function MatchScreen() {
 
   const [watching, setWatching] = useState(null);        // fieldId the player chose to watch (null = home)
   const [watchWho, setWatchWho] = useState(null);        // { fieldId, playerId }: the teammate picked with 前往查看
+  const watchRequest = useRef(0);
   const [drawer, setDrawer] = useState(null);            // 'enemies' | 'info' | null
   const [bondOpen, setBondOpen] = useState(null);        // { id, ownerId, from }: the bond popup and whose bond it shows
   const [bondsCollapsed, setBondsCollapsed] = useState(false);
@@ -426,11 +429,11 @@ function MatchScreen() {
     }
     if (!view) return;
     if (showPrep) {
-      if (field?.prep) staleFieldRef.current = field; // a prep scouting board is never a battle to enter
+      if (field?.prep && field.fieldId === ownFieldId(myId)) staleFieldRef.current = field; // a prep scouting board is never a battle to enter
       if (viewModeRef.current !== 'prep') {
         // the battle we just left (or whatever was stored before mount) must not be re-entered next combat;
         // an m.field that arrives during prep (the upcoming battle) is a new object and will be entered
-        staleFieldRef.current = field;
+        staleFieldRef.current = field?.prep && field.fieldId !== ownFieldId(myId) ? null : field;
         const pc = prepCameraFor(pub, myId, shopFolded);
         setCam(pc.kind, pc.opts);
         prepCamSeen.current = prepCamKey;
@@ -496,10 +499,7 @@ function MatchScreen() {
     if (!earlySnap && (field.prep || !combat) && Array.isArray(field.units)) {
       // prep scouting: no battle snapshots follow. A later m.field for this board (the teammate moved) re-enters
       // above and places the units again, including an empty board (GitHub #87).
-      view.pushSnapshot({
-        fieldId: field.fieldId, gt: 0,
-        units: field.units.filter((u) => u && u.id != null).map((u) => [u.id, Number(u.x) || 0, Number(u.y) || 0, u.maxHp || 1, u.maxHp || 1, 0, 0, 0, 0]),
-      });
+      view.pushSnapshot(prepSnapshot(field));
     }
     if (earlySnap) {
       view.pushSnapshot(earlySnap);
@@ -664,6 +664,7 @@ function MatchScreen() {
   const resultSeq = useRef(0);                           // re-keys the result box (ResultDialog) at every SETTLE
   useEffect(() => {
     const prev = prevPhase.current;
+    watchRequest.current++;
     prevPhase.current = phase;
     if (prev === phase) return;
     const b = phaseBanner(phase, pub, { alive, spectator });
@@ -819,21 +820,21 @@ function MatchScreen() {
   // `playerId`: the teammate picked (a team row) — a shared field shows two players, the strip follows the picked one
   // (DESIGN §20.15); null for a field picked as such (the legacy switcher).
   const requestWatch = useCallback(async (fid, playerId = null) => {
-    const prev = live.current.watching;
-    const prevWho = live.current.watchWho;
+    const seq = ++watchRequest.current;
     const who = playerId ? { fieldId: fid, playerId } : null;
-    setWatching(fid);
-    setWatchWho(who);
     const ok = await actions.watch(fid, playerId);
-    if (!ok) {
-      setWatching((w) => (w === fid ? prev : w));
-      setWatchWho((w) => (w === who ? prevWho : w));
+    if (ok && seq === watchRequest.current) {
+      // m.field precedes the ack; it is the requested scout, not a stale own-prep field.
+      if (live.current.field?.prep && live.current.field.fieldId === fid && staleFieldRef.current === live.current.field) staleFieldRef.current = null;
+      setWatching(fid);
+      setWatchWho(who);
     }
     return ok;
   }, []);
 
   /** Back to the own field (返回战场 / the own row). */
-  const backHome = useCallback(() => {
+  const backHome = useCallback(async () => {
+    const seq = ++watchRequest.current;
     const L = live.current;
     if (L.watching && L.watching !== L.home) {
       const target = isCombatPhase(L.pub?.phase) ? L.home : ownFieldId(L.myId);
@@ -843,8 +844,9 @@ function MatchScreen() {
       const combatNow = isCombatPhase(L.pub?.phase);
       const exists = combatNow ? (!isClientCombat(L.pub) || (Array.isArray(L.pub?.fields) && L.pub.fields.some((f) => f && f.fieldId === target)))
         : (L.alive && !L.spectator);
-      if (exists) actions.watch(target);
+      if (exists && !await actions.watch(target)) return;
     }
+    if (seq !== watchRequest.current) return;
     setWatching(null);
     setWatchWho(null);
   }, []);
@@ -861,11 +863,7 @@ function MatchScreen() {
     }
     const self = p.playerId === L.myId;
     if (self) {
-      // (an eliminated player / spectator seat has no prep board of its own to ask for: item 56)
-      const combatNow = isCombatPhase(L.pub?.phase);
-      if (L.watching && L.watching !== L.home && (combatNow || (L.alive && !L.spectator))) actions.watch(combatNow ? L.home : ownFieldId(L.myId));
-      setWatching(null);
-      setWatchWho(null);
+      backHome();
       return;
     }
     const t = watchTarget(p, L.pub, L.myId);
@@ -1453,7 +1451,7 @@ function MatchScreen() {
           }}><${Icon} name=${bondsCollapsed ? 'chevronRight' : 'chevronLeft'} /></button>
         <div id="match-bond-strip" class="gm__bond-list" hidden=${bondsCollapsed}>
           <${BondStrip} bonds=${stripBonds} layersDisabled=${layersDisabled} openId=${bondPop && bondPop.ownerId === strip.ownerId ? bondPop.bondId : null}
-            owner=${strip.name} onOpen=${(id) => openBond(id, strip.ownerId, 'strip')} />
+            owner=${strip.name} ownerId=${strip.ownerId} onOpen=${(id) => openBond(id, strip.ownerId, 'strip')} />
         </div>
       </div>
 
@@ -1515,6 +1513,10 @@ function MatchScreen() {
         name=${(selEntry.piece.kind === 'item' ? gd.item(selEntry.piece.id) : selEntry.piece.kind === 'token' ? gd.token(selEntry.piece.id) : ownShown(selEntry.piece.id))?.name || ''}
         onRetreat=${retreatSel} onSell=${sellSel} onDestroy=${sellSel} />` : null}
     </div>
+
+    <${Communications} view=${view} pub=${pub} priv=${priv} myId=${myId} ownerId=${strip.ownerId || (watchingOther || spectator ? scoutPid || watchWho?.playerId || field?.units?.find((u) => u.ownerId)?.ownerId || myId : myId)}
+      field=${showPrep ? null : field} stage=${ownView ? ownStage : baseStage} spectator=${spectator} blocked=${!!drag || !!facing || settingsOpen || exitOpen || paused}
+      emoteOpen=${emoteOpen} onCloseEmote=${() => setEmoteOpen(false)} />
 
     ${sp ? html`<${ChoiceOverlay} pub=${pub} sp=${sp} myId=${myId} solo=${solo} busyIdx=${spBusy} total=${total}
       onPick=${async (i) => { setSpBusy(i); await actions.choice(i); setSpBusy(null); }} />` : null}

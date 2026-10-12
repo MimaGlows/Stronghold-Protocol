@@ -96,5 +96,9 @@ test('战术决策 overlay: the same card twice is two cards — own keys, same 
   sp = pub({ p2: a, me: b });
   cards = cardsOf(view(sp));
   assert.ok(hasClass(cards[b], 'is-mine') && !hasClass(cards[a], 'is-mine'));
-  assert.ok(cards.every((c) => c.props.disabled), 'nothing left to pick for me');
+  assert.ok(cards.every((c) => c.props['aria-disabled'] === 'true'), 'nothing left to pick for me');
+  for (const c of cards) {
+    assert.equal(c.props.disabled, !!c.props.class.includes('is-taken'), 'unclaimed cards remain pointer targets for intentions');
+    if (!c.props.disabled) assert.equal(c.props['data-comm'], 'choice');
+  }
 });

@@ -1,5 +1,7 @@
 # 卫戍协议：盟约 · Stronghold Protocol: Alliance
 
+此分支为 MimaGlows 的 Windows v0.2.4 正式定制版，保留账号、回放、好友及通讯等功能。安装、定制内容和验证记录见 [定制版说明](docs/GITHUB-WINDOWS-CUSTOM.md)；Windows 可双击 `start-custom-windows.cmd`。
+
 《明日方舟》季节性自走棋塔防玩法「卫戍协议：盟约」的**非官方同人复刻**：浏览器即开即玩，单人或 1–4 人联机合作。
 
 ![version](https://img.shields.io/badge/version-0.2.4-2ea44f)

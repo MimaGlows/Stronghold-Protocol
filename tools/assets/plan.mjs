@@ -327,7 +327,7 @@ export function collectEnemyIds({ assets07, enemies05, maps05, ops03 }) {
  * @returns {{ template: any, models: Map<string, any>, notes: string[] }}
  */
 export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsData, charword = null, voiceLang = 'cn',
-  voiceJp = true, voiceSlots = VOICE_BATTLE_SLOTS,
+  voiceJp = true, voiceLanguages = ['cn', 'jp'], voiceSlots = VOICE_BATTLE_SLOTS,
   extraEnemyIds = [], extraTokenIds = [], extraHandbook = {}, localEnemySpines = {}, localTokenSpines = {}, extraOperators = {},
   moduleTypes = [] }) {
   const notes = [];
@@ -681,6 +681,8 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
     return tree;
   };
   const voice = voiceTree(voiceLang);
+  const voices = Object.fromEntries([...new Set(['cn', 'jp', voiceLang, ...voiceLanguages])]
+    .map((lang) => [lang, lang === voiceLang ? voice : voiceTree(lang)]));
   if (!Object.keys(voice).length) notes.push('battle voice: charword_table.json has no slots (index missing?)');
 
   const template = {
@@ -688,8 +690,8 @@ export function buildPlan({ assets07, ops03, enemies05, maps05, audio, modelsDat
     audio: {
       bgm,
       bossBgm: Object.fromEntries(Object.entries(bossBgm).sort(([a], [b]) => a.localeCompare(b, 'en', { numeric: true }))),
-      voice,
-      ...(voiceJp ? { voiceJp: voiceTree(VOICE_JP_LANG) } : {}),
+      voice, voices,
+      ...(voiceJp ? { voiceJp: voices[VOICE_JP_LANG] } : {}),
       sfx: { ui: sfxUi, battle: sfxBattle, units: unitsSfx },
     },
   };

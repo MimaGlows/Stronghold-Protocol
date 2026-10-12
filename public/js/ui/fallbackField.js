@@ -23,7 +23,7 @@ import { render } from '../../vendor/preact.module.js';
 import { html, TierChip } from './components.js';
 import { GEO } from '../../../shared/constants.js';
 import { chessAvatarUrl, itemIconUrl, tokenAvatarUrl, enemyIconUrl } from './assetUrls.js';
-import { tileKey, hasFlag, UF, penPlacement, PEN, fieldTile, ownStandIn, ownDiyRecord } from './gameLogic.js';
+import { tileKey, hasFlag, UF, penPlacement, PEN, fieldTile, boardTileOf, ownStandIn, ownDiyRecord } from './gameLogic.js';
 import { t } from '../../../shared/i18n.js';
 
 const DRAG_PX = 6;
@@ -118,6 +118,7 @@ export function createFallbackView(host, opts = {}) {
   }
 
   const tilePos = (L, row, col) => ({ x: (col - st.rect.c0) * L.tile, y: (st.rect.r1 - row) * L.tile });
+  const boardPos = (L, row, col) => tilePos(L, ...fieldTile(st.deployField, row, col));
   const handPos = (L, idx) => ({ x: idx * L.tile, y: (L.rows + 0.6) * L.tile });
   const tempPos = (L, idx) => ({ x: (GEO.TEMP_C0 + idx) * L.tile, y: (L.rows + 1.72) * L.tile });
 
@@ -256,7 +257,7 @@ export function createFallbackView(host, opts = {}) {
     const spPct = spMax > 0 ? Math.max(0, Math.min(100, (sp / spMax) * 100)) : 0;
     return html`<div class=${cx('ff-unit', enemy ? 'is-enemy' : 'is-ally', info.golden && 'is-golden', info.boss && 'is-boss', dead && 'is-dead',
         hasFlag(flags, UF.SKILL) && 'is-skill', hasFlag(flags, UF.STUNNED | UF.FROZEN | UF.SLEEP) && 'is-stunned', hasFlag(flags, UF.FLYING) && 'is-fly')}
-        style=${`transform:translate(${px - size / 2}px,${py - size / 2}px);width:${size}px;height:${size}px`}
+        data-unit=${id} style=${`transform:translate(${px - size / 2}px,${py - size / 2}px);width:${size}px;height:${size}px`}
         onPointerDown=${(e) => { if (e.button === 0) emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 0, clientX: e.clientX, clientY: e.clientY }); }}
         onContextMenu=${(e) => { e.preventDefault(); emit('pieceClick', { unitId: id, uid: info.uid ?? null, unit: info, button: 2, clientX: e.clientX, clientY: e.clientY }); }}>
       <div class="ff-unit__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...(info.name || '?')][0]}</span>`}</div>
@@ -317,13 +318,16 @@ export function createFallbackView(host, opts = {}) {
     for (let row = r.r1; row >= r.r0; row--) {
       for (let col = r.c0; col <= r.c1; col++) {
         const p = tilePos(L, row, col);
-        const k = tileKey(row, col);
+        const bossPrep = st.mode === 'prep' && st.deployField !== 'normal';
+        const [br, bc] = bossPrep ? boardTileOf(st.deployField, row, col) : [row, col];
+        const own = !bossPrep || (br >= GEO.NORMAL_RECT.r0 && br <= GEO.NORMAL_RECT.r1 && bc >= GEO.NORMAL_RECT.c0 && bc <= GEO.NORMAL_RECT.c1);
+        const k = tileKey(br, bc);
         let hl = st.highlight.get(k);
         for (const g of st.hlGroups.values()) if (g.tiles.has(k)) hl = g.name;
-        const hov = st.hoverTarget?.area === 'board' && st.hoverTarget.row === row && st.hoverTarget.col === col ? dropState(st.hoverTarget) : null;
-        tiles.push(html`<div key=${k} class=${cx('ff-tile', `ff-tile--${tileClass(row, col)}`, hl && `is-${hl}`, hov && `is-hover-${hov}`)}
-          data-drop="board" data-row=${row} data-col=${col}
-          onPointerDown=${(e) => { if (e.button === 0) emit('tileClick', { row, col, button: 0, clientX: e.clientX, clientY: e.clientY }); }}
+        const hov = own && st.hoverTarget?.area === 'board' && st.hoverTarget.row === br && st.hoverTarget.col === bc ? dropState(st.hoverTarget) : null;
+        tiles.push(html`<div key=${tileKey(row, col)} class=${cx('ff-tile', `ff-tile--${bossPrep ? fallbackTileClass(st.stage, row, col) : tileClass(row, col)}`, own && hl && `is-${hl}`, hov && `is-hover-${hov}`)}
+          data-drop=${own ? 'board' : null} data-row=${br} data-col=${bc} data-field-row=${row} data-field-col=${col}
+          onPointerDown=${(e) => { if (own && e.button === 0) emit('tileClick', { row: br, col: bc, button: 0, clientX: e.clientX, clientY: e.clientY }); }}
           style=${`transform:translate(${p.x}px,${p.y}px);width:${L.tile}px;height:${L.tile}px`}></div>`);
       }
     }
@@ -331,7 +335,7 @@ export function createFallbackView(host, opts = {}) {
     const hand = [];
     const now = performance.now();
     if (st.mode === 'prep' && st.priv) {
-      const heldPos = (p) => { const t = st.held.get(p.uid); return t ? tilePos(L, t.row, t.col) : null; };
+      const heldPos = (p) => { const t = st.held.get(p.uid); return t ? boardPos(L, t.row, t.col) : null; };
       for (const u of Array.isArray(st.priv.prepMapChars) ? st.priv.prepMapChars : []) {
         if (!u || !Number.isInteger(u.x) || !Number.isInteger(u.y) || typeof u.defId !== 'string') continue;
         const pos = tilePos(L, u.y, u.x);
@@ -344,8 +348,16 @@ export function createFallbackView(host, opts = {}) {
       }
       for (const p of Array.isArray(st.priv.board) ? st.priv.board : []) {
         if (!p || !Number.isInteger(p.row)) continue;
-        const pos = heldPos(p) || tilePos(L, p.row, p.col);
+        const pos = heldPos(p) || boardPos(L, p.row, p.col);
         pieces.push(html`<${Piece} key=${p.uid} p=${p} x=${pos.x} y=${pos.y} L=${L} area="board" />`);
+      }
+      if (st.deployField !== 'normal') for (const u of st.priv.bossMate?.units || []) {
+        const [row, col] = u.pos || [u.y, u.x];
+        const pos = tilePos(L, row, col), src = unitArt(m(), u);
+        pieces.push(html`<div key=${`mate-${u.id}`} class="ff-piece" data-mate-unit=${u.id}
+          style=${`transform:translate(${pos.x}px,${pos.y}px);width:${L.tile}px;height:${L.tile}px`} title=${u.name || ''}>
+          <div class="ff-piece__art">${src ? html`<img src=${src} alt="" draggable=${false} />` : html`<span>${[...(u.name || '?')][0]}</span>`}</div>
+        </div>`);
       }
       for (let i = 0; i < GEO.HAND_SIZE; i++) {
         const pos = handPos(L, i);
@@ -403,7 +415,7 @@ export function createFallbackView(host, opts = {}) {
       if (o && o.rect && Number.isFinite(o.rect.r0)) st.rect = { ...o.rect };
       else if (kind === 'prep' || kind === 'bossPrep' || kind === 'normal') st.rect = { ...GEO.NORMAL_RECT };
       st.deployField = kind === 'bossPrep' ? (o?.side === 'R' ? 'bossR' : 'bossL') : 'normal';
-      if (kind === 'bossPrep') st.camera = 'prep';
+      if (kind === 'bossPrep') { st.camera = 'prep'; st.rect = { ...GEO.BOSS_RECT }; }
       else if (kind === 'unite') st.rect = { ...GEO.UNITE_RECT };
       else if (kind === 'boss') st.rect = { ...GEO.BOSS_RECT };
       st.side = o?.side || 'L';
@@ -499,6 +511,35 @@ export function createFallbackView(host, opts = {}) {
       return el ? el.getBoundingClientRect() : null;
     },
     /** Client geometry of a tile: centre, px per tile, corners (board tiles and 整备区 slots of the prep layout). */
+    pickCommunication(clientX, clientY) {
+      for (const el of document.elementsFromPoint(clientX, clientY)) {
+        if (!root.contains(el)) continue;
+        const enemy = el.closest('[data-enemy]');
+        if (enemy) return { type: 'enemy', enemyKey: enemy.dataset.enemy };
+        const mate = el.closest('[data-mate-unit]');
+        if (mate) return { type: 'unit', unit: st.priv?.bossMate?.units?.find((u) => String(u.id) === mate.dataset.mateUnit), space: 'field' };
+        const piece = el.closest('[data-uid]');
+        if (piece) {
+          const uid = Number(piece.dataset.uid), board = st.priv?.board?.find((u) => u.uid === uid);
+          return { type: 'piece', uid, area: board ? 'board' : 'hand', row: board?.row, col: board?.col, space: 'board' };
+        }
+        const unit = el.closest('[data-unit]');
+        if (unit) return { type: 'unit', unit: st.units.get(Number(unit.dataset.unit)), space: 'field' };
+        const tile = el.closest('[data-field-row]');
+        if (tile) return { type: 'tile', row: Number(tile.dataset.fieldRow), col: Number(tile.dataset.fieldCol), space: 'field' };
+      }
+      return null;
+    },
+    unitScreen(ownerId,uid) {
+      for(const [id,u] of st.units){const snap=st.snapUnits.get(id);if(u.ownerId!==ownerId || u.uid!==uid || u.kind!=='op' || !snap || snap[3]<=0)continue;
+        const L=layout(),p=tilePos(L,snap[2],snap[1]),r=host.getBoundingClientRect();return {x:r.left+L.left+p.x+L.tile/2,y:r.top+L.top+p.y+L.tile/2};}
+      return null;
+    },
+    fieldTileScreen(row, col) {
+      if (st.destroyed) return null;
+      const L = layout(), p = tilePos(L, row, col), r = host.getBoundingClientRect();
+      return { x: r.left + L.left + p.x + L.tile / 2, y: r.top + L.top + p.y + L.tile / 2 };
+    },
     tileScreen(row, col) {
       const L = layout();
       const br = root.querySelector('.ff-board')?.getBoundingClientRect();
@@ -506,7 +547,10 @@ export function createFallbackView(host, opts = {}) {
       let p = null;
       if (row === GEO.HAND_ROW && col >= 0 && col < GEO.HAND_SIZE && st.mode === 'prep') p = handPos(L, col);
       else if (row === GEO.TEMP_ROW && col >= GEO.TEMP_C0 && col < GEO.TEMP_C0 + GEO.TEMP_SIZE && st.mode === 'prep') p = tempPos(L, col - GEO.TEMP_C0);
-      else if (row >= st.rect.r0 && row <= st.rect.r1 && col >= st.rect.c0 && col <= st.rect.c1) p = tilePos(L, row, col);
+      else {
+        const [r, c] = st.mode === 'prep' ? fieldTile(st.deployField, row, col) : [row, col];
+        if (r >= st.rect.r0 && r <= st.rect.r1 && c >= st.rect.c0 && c <= st.rect.c1) p = tilePos(L, r, c);
+      }
       if (!p) return null;
       const x0 = br.left + p.x, y0 = br.top + p.y, s = L.tile;
       return { x: x0 + s / 2, y: y0 + s / 2, s, poly: [[x0, y0], [x0 + s, y0], [x0 + s, y0 + s], [x0, y0 + s]] };
@@ -525,6 +569,7 @@ export function createFallbackView(host, opts = {}) {
       st.size = { w: host.clientWidth, h: host.clientHeight };
       schedule();
     },
+    stats() { return { mode: st.mode, fieldId: st.field?.fieldId || null, units: st.snapUnits.size, listeners: [...listeners.values()].reduce((n,s)=>n+s.size,0), destroyed: st.destroyed }; },
     destroy() {
       if (st.destroyed) return;
       st.destroyed = true;

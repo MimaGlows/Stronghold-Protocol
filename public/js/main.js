@@ -20,9 +20,7 @@
 // Multi-device support (ui/device.js + css/devices.css): feature classes on <html>, no page zoom, safe areas, rotation
 // re-layout; ui/compat.js polyfills are imported before anything else.
 // 干员调配 (DESIGN §16): an overlay over any route (<LoadoutHost/>, opened from lobby / room / briefing); its loadout is
-// kept in sync with the server by installLoadoutSync (room.loadout after every welcome and edit), its 干员持有 tab's
-// not-owned list (0.2.0 补位) by installOwnershipSync (room.ownership, likewise), the 自选编队 picks (0.2.0 DIY) by
-// installDiySync (room.diy, likewise; it also keeps welcome.diyKitted for the picker).
+// account-owned roster/listening settings are hydrated from welcome before installProfilePreferences sends edits.
 // Game data: every text of the game is static data (/data/*.json) downloaded once per page; the in-match files are
 // warmed in the background as soon as the player is in a room (warmGameData), before the match needs them.
 // Language (ui/lang.js, docs/I18N.md): chosen before the first render (initLang); App re-renders on a switch (useLang).
@@ -31,6 +29,9 @@
 
 // Polyfills first (older Safari / Firefox ESR): every module evaluated after this one sees them.
 import './ui/compat.js';
+import { installCommunications } from './ui/communications.js';
+import { installSocial, FriendsDrawer, SocialInviteHost, requestInvitePermissionOnGesture } from './ui/social.js';
+import { clearProfileView } from './ui/profileView.js';
 import { render } from '../vendor/preact.module.js';
 import { useErrorBoundary } from '../vendor/hooks.module.js';
 import { html, UiHosts, Button, MicroLabel, closeAllDialogs } from './ui/components.js';
@@ -40,7 +41,7 @@ import { net, identity, NetError } from './net.js';
 import { store, useStore, emptyMatch, selectRoute, sessionResetNotice, isSpectating } from './store.js';
 import { data } from './data.js';
 import { GAME_FILES } from './ui/gameComponents.js';
-import { TitleScreen, sanitizeName } from './screens/title.js';
+import { TitleScreen, sanitizeDoctorName } from './screens/title.js';
 import { LobbyScreen, rememberRoom, parseRoomParam } from './screens/lobby.js';
 import { RoomScreen } from './screens/room.js';
 import { GameScreen } from './screens/game.js';
@@ -49,12 +50,19 @@ import { settingsStore } from './ui/settings.js';
 import { GuideHost } from './ui/guide.js';
 import { installDeviceSupport } from './ui/device.js';
 import { LoadoutHost } from './screens/loadout.js';
-import { StatsHost } from './screens/stats.js';
-import { recordResult, installStatsRecorder } from './ui/stats.js';
-import { installLoadoutSync, installOwnershipSync, installDiySync } from './ui/loadoutSync.js';
+import { installProfilePreferences } from './ui/profilePreferences.js';
 import { startBuildGuard } from './ui/buildGuard.js';
 import { initLang, useLang, tickerText } from './ui/lang.js';
 import { t, N_, translateWire } from '../../shared/i18n.js';
+import { AvatarHost } from './ui/avatarPicker.js';
+import { installProfileTransfer, ProfileTransferHost } from './ui/profileTransfer.js';
+import { installAvatarSync, avatarStore } from './ui/avatarProfile.js';
+import { checkAvatarChoice, DEFAULT_AVATAR } from '../../shared/avatar.js';
+
+import { HistoryHost } from './replay/host.js';
+import { rememberMatch, restoreHistory, beginHistoryProfile, historyStore, parseSharedReplay, openSharedReplay } from './replay/history.js';
+import { StatsHost } from './screens/stats.js';
+import { accountStatsStore, beginStatsProfile, refreshStats } from './ui/accountStats.js';
 import { recordError } from './diag.js';
 
 const RESTORE_GRACE_MS = 1500;
@@ -136,7 +144,6 @@ function maybeFinishRestore() {
  * follow the store themselves).
  */
 function backToLobby() {
-  identity.rememberMatch(null);
   clearTimeout(restoreTimer);
   const s = store.get();
   if (s.room || s.match.public) closeAllDialogs();
@@ -146,12 +153,17 @@ function backToLobby() {
 
 function onWelcome(msg) {
   identity.saveToken(msg.token);
-  identity.rememberMatch(null);
   const prev = store.get();
   const prevId = prev.me.playerId;
   const name = typeof msg.name === 'string' && msg.name ? msg.name : prev.me.name;
-  identity.saveName(name);
-  store.set({ me: { playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null } });
+  store.set({ me: { playerId: msg.playerId ?? null, name, token: typeof msg.token === 'string' ? msg.token : null, avatar: msg.avatar || DEFAULT_AVATAR } });
+  if (msg.doctorCode) {
+    store.patch('me', { doctorCode: msg.doctorCode });
+    identity.saveName(`${name}#${msg.doctorCode}`);
+    beginHistoryProfile(`${name}#${msg.doctorCode}`);
+    beginStatsProfile(`${name}#${msg.doctorCode}`, msg.statsRevision);
+    void refreshStats();
+  }
   welcomeAt = Date.now();
 
   if (prevId != null && prevId !== msg.playerId) {
@@ -191,8 +203,6 @@ function onRoomState(msg) {
   // A (new) match starts: forget the previous match's state so stale results never show.
   if (room.inMatch && !(prevRoom && prevRoom.inMatch && prevRoom.code === room.code)) store.set({ match: emptyMatch() });
   store.set({ room });
-  identity.rememberMatch(room.inMatch && seats.some((seat) => seat?.playerId === myId)
-    ? { name: store.get().me.name, code: room.code || '' } : null);
   if (room.mode === 'coop' && typeof room.code === 'string') rememberRoom(room.code);
   maybeFinishRestore();
 }
@@ -215,10 +225,10 @@ function wireNet() {
   });
   net.on('clock', (c) => store.set({ clock: { offset: c.offset, rtt: c.rtt, synced: c.synced } }));
   net.on('welcome', onWelcome);
-  net.on('helloError', (err) => {
-    if (err.code === 'SESSION_IN_USE') identity.rejectToken();
-    toastError(err);
-  });
+  net.on('profileChanging', ({ name }) => { clearProfileView(); beginHistoryProfile(name); beginStatsProfile(name); });
+  net.on('profile.stats.changed', (msg) => { if (msg.profileKey === accountStatsStore.get().profileKey) { beginStatsProfile(msg.profileKey, msg.revision); void refreshStats(); } });
+  net.on('profile.history', (msg) => { if (msg.profileKey === historyStore.get().profileKey) restoreHistory(msg.history); });
+  net.on('helloError', (err) => toastError(err));
   net.on('replaced', () => toast(t('该身份已在其他页面登录，本页已断开'), 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
   net.on('room.state', onRoomState);
@@ -227,15 +237,14 @@ function wireNet() {
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');
   });
-  net.on('m.public', (msg) => { matchAt = Date.now(); store.patch('match', { public: payload(msg) }); maybeFinishRestore(); });
+  net.on('m.public', (msg) => { matchAt = Date.now(); rememberMatch(msg, store.get().me.playerId); store.patch('match', { public: payload(msg) }); maybeFinishRestore(); });
   net.on('m.private', (msg) => { matchAt = Date.now(); store.patch('match', { private: payload(msg) }); });
   net.on('m.field', (msg) => store.patch('match', { field: payload(msg) }));
   net.on('m.result', (msg) => {
+    rememberMatch(msg, store.get().me.playerId);
     const res = payload(msg);
     store.patch('match', { result: res });
-    // 本机统计 (PR #323): every arrival, including the lobby's result replay after a reconnect / reload —
-    // replays dedupe by content id inside recordResult (spectator seats' copies build no record at all)
-    recordResult(res, { myId: store.get().me.playerId, roomMode: store.get().room?.mode ?? null, now: Date.now() });
+    void refreshStats();
   });
   net.on('m.toast', (msg) => {
     const kind = ['info', 'success', 'warn', 'error'].includes(msg.kind) ? msg.kind : 'info';
@@ -304,6 +313,11 @@ function App() {
     <${UiHosts} />
     <${GuideHost} />
     <${LoadoutHost} />
+    <${AvatarHost} />
+    <${HistoryHost} />
+    <${FriendsDrawer} visible=${route === 'lobby' || (route === 'room' && store.get().room?.mode === 'coop')} />
+    <${SocialInviteHost} />
+    <${ProfileTransferHost} />
     <${StatsHost} />
   </div>`;
 }
@@ -350,7 +364,7 @@ async function boot() {
   const identityReady = identity.init();
 
   const pendingJoin = parseRoomParam(location.search);
-  const savedName = sanitizeName(identity.loadName());
+  const savedName = sanitizeDoctorName(identity.loadName());
   const entered = identity.wasEntered() && !!savedName;
   store.set((s) => ({
     me: { ...s.me, name: savedName },
@@ -359,10 +373,14 @@ async function boot() {
   }));
 
   wireNet();
-  installStatsRecorder(store); // follows the match on screen, so a 放弃模拟 can be recorded (ui/stats.js)
-  installLoadoutSync({ net });
-  installOwnershipSync({ net });
-  installDiySync({ net });
+  installProfileTransfer();
+  installSocial();
+  // Entrances can be a click, deep link or session restore. Only a real gesture may prompt.
+  window.addEventListener('click', requestInvitePermissionOnGesture, { capture: true });
+  installCommunications();
+  installAvatarSync({ net });
+  installProfilePreferences({ net });
+  // Server owns record persistence; no browser-local stats recorder. // // follows the match on screen, so a 放弃模拟 can be recorded (ui/stats.js)
   net.attachBrowserHooks();
   // Audio: unlock on first gesture, BGM follows the route / match phase (js/audio.js).
   installAudio({ getManifest: () => data.get('assets'), subscribe: store.subscribe, getState: store.get, selectRoute, settings: settingsStore.get() });
@@ -372,7 +390,13 @@ async function boot() {
   // Optional local-client art manifest (emotes, tutorial pages, official UI sprites; DESIGN §13).
   data.load('local').catch(() => {});
 
-  const connectWhenReady = identityReady.then(() => {
+  const avatarReady = data.load('assets').then((manifest) => {
+    if ('error' in checkAvatarChoice(avatarStore.get().avatar, manifest || {})) {
+      avatarStore.set({ avatar: DEFAULT_AVATAR });
+      toast(t('原头像已不可用，已恢复默认头像'), 'warn');
+    }
+  }).catch(() => {});
+  const connectWhenReady = Promise.all([identityReady, avatarReady]).then(() => {
     if (entered) net.setName(savedName);
     else net.connect();
   });
@@ -381,6 +405,8 @@ async function boot() {
   await Promise.all([waitForFonts(1200), connectWhenReady, langReady]);
   const root = document.getElementById('app');
   render(html`<${App} />`, root);
+  const openShareFromLocation = () => { const code = parseSharedReplay(location.hash); if (code) openSharedReplay(code); };
+  openShareFromLocation(); window.addEventListener('hashchange', openShareFromLocation);
 
   const splash = document.getElementById('boot');
   if (splash) {
@@ -394,7 +420,7 @@ async function boot() {
   // so a running game is never thrown away.
   try {
     startBuildGuard({
-      inMatch: () => selectRoute(store.get()) === 'game',
+      inMatch: () => selectRoute(store.get()) === 'game' || historyStore.get().open,
       onStale: ({ waiting }) => { if (waiting) store.patch('ui', { buildStale: true }); },
     });
   } catch (err) {

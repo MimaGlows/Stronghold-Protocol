@@ -30,7 +30,12 @@ import { copyText } from './clipboard.js';
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
 /** Settings store: { bgm, sfx, voice, voiceLang, voiceOverrides, muted, damageNumbers, quality, textSize, keys }. */
-export const settingsStore = createStore(sanitizeSettings(loadPref('settings', null)));
+const storedSettings = loadPref('settings', null);
+export const hotkeyMigration = storedSettings?.keys && (!Object.hasOwn(storedSettings.keys, 'ping') || !Object.hasOwn(storedSettings.keys, 'radio'))
+  ? Object.entries(sanitizeSettings(storedSettings).keys).filter(([key, value]) => storedSettings.keys[key] && storedSettings.keys[key] !== value).map(([key, value]) => ({ key, from: storedSettings.keys[key], to: value })) : [];
+export const settingsStore = createStore(sanitizeSettings(storedSettings));
+if (hotkeyMigration.length) savePref('settings', settingsStore.get());
+
 
 /**
  * 设置 →「文字大小」: put the step on <html data-text> — css/theme.css turns it into the text root `--t`
@@ -47,11 +52,11 @@ export function applyTextSize(v) {
 settingsStore.subscribe((s) => {
   savePref('settings', sanitizeSettings(s));
   audio.setVolumes(s);
-  audio.setVoiceLang(s.voiceLang, s.voiceOverrides);
+  audio.setVoicePreferences(s);
   applyTextSize(s.textSize);
 });
 audio.setVolumes(settingsStore.get());
-audio.setVoiceLang(settingsStore.get().voiceLang, settingsStore.get().voiceOverrides);
+audio.setVoicePreferences(settingsStore.get());
 // before the first render (main.js boot renders after its imports ran): the stored step is on screen without a flash
 applyTextSize(settingsStore.get().textSize);
 
@@ -101,7 +106,7 @@ const TEXT_SCALES = [['sm', N_('小')], ['md', N_('中')], ['lg', N_('大')], ['
 const VOICE_LANG_NAMES = { cn: '中文', jp: '日本語' }; // i18n-ignore
 /** The rebindable shortcuts' names (msgids), by action. */
 const HOTKEY_NAMES = { refresh: N_('刷新商店'), freeze: N_('冻结 / 解冻商店'), levelUp: N_('升级调度中心'), retreat: N_('撤退选中干员'),
-  sell: N_('出售选中干员'), ready: N_('准备就绪 / 暂停（独立模拟）') };
+  ping: N_('标点（按住）'), radio: N_('无线电'), sell: N_('出售选中干员'), ready: N_('准备就绪 / 暂停（独立模拟）') };
 
 /**
  * 快捷键: each shortcut with its key. Click its key (or Enter / Space on it) and press the new one: Esc cancels (the
@@ -178,6 +183,7 @@ function HotkeySection({ keys, touchUi }) {
       <${Button} variant="ghost" size="sm" icon="refresh" class="set-keys__reset" disabled=${isDefaultHotkeys(keys)}
         onClick=${() => { setWaiting(null); updateSettings({ keys: DEFAULT_HOTKEYS }); setNote({ text: t('已恢复默认快捷键') }); }}>${t('恢复默认')}<//>
     </div>
+    ${hotkeyMigration.length ? html`<p class="set-hint">${t('新增标点与无线电快捷键，原有冲突键已迁移；可在下方调整。')}</p>` : null}
     ${touchUi ? html`<p class="set-hint">${t('快捷键需要实体键盘；触屏设备连接键盘后可用')}</p>
       <details class="set-keys__more"><summary>${t('查看 / 更改快捷键')}</summary>${list}</details>` : list}
   </section>`;
@@ -195,6 +201,24 @@ export const ISSUES_URL = 'https://github.com/sganggs/Stronghold-Protocol/issues
  */
 /** The result line of 复制诊断信息, by outcome (msgids: translated when shown, so a language switch reaches it). */
 const DIAG_NOTES = { copied: N_('已复制诊断信息，可以粘贴到 GitHub issue 中'), refused: N_('无法写入剪贴板，请手动复制下面的内容') };
+
+function PrivacySettings({ s }) {
+  const ready = useStore((state) => !!state.me.doctorCode && state.connection.status === 'online');
+  const privacy = s.socialPrivacy;
+  const update = (patch) => updateSettings({ socialPrivacy: { ...privacy, ...patch } });
+  return html`<section class="set-privacy" aria-label=${t('好友与个人资料')}>
+    <h3>${t('好友与个人资料')}</h3>
+    <${Toggle} label=${t('允许好友观战')} micro="FRIEND SPECTATING" value=${privacy.allowFriendSpectate} disabled=${!ready} onChange=${(value) => update({ allowFriendSpectate: value })} />
+    <${Toggle} label=${t('允许好友加入房间')} micro="FRIEND JOINING" value=${privacy.allowFriendJoin} disabled=${!ready} onChange=${(value) => update({ allowFriendJoin: value })} />
+    <p class="set-hint">${t('关闭后禁用好友列表的直接入口；链接和直接邀请不受影响。已加入的玩家不会被移除。')}</p>
+    <div class="set-row"><span class="set-row__label">${t('个人资料可见范围')}<${MicroLabel}>PROFILE VISIBILITY<//></span>
+      <select class="set-privacy__scope" disabled=${!ready} aria-label=${t('个人资料可见范围')} value=${privacy.profileVisibility} onChange=${(event) => update({ profileVisibility: event.currentTarget.value })}>
+        <option value="none">${t('均不可见')}</option><option value="friends">${t('仅好友')}</option><option value="friends_recent">${t('好友和最近同游玩家')}</option>
+      </select>
+    </div>
+    <p class="set-hint">${ready ? t('设置随伪账号保存，服务器保存成功后生效；资料范围按你的好友和最近五场队友判断。') : t('请先登录伪账号，再修改好友与资料权限。')}</p>
+  </section>`;
+}
 
 function DiagSection() {
   const [attach, setAttach] = useState(true);
@@ -255,8 +279,8 @@ export function SettingsModal({ open, onClose }) {
       <div class="set-row">
         <span class="set-row__label">${t('语音语言')}<${MicroLabel}>VOICE LANGUAGE<//></span>
         <div class="set-seg" role="radiogroup" aria-label=${t('语音语言')} data-testid="voice-lang">
-          ${VOICE_LANGS.map((id) => html`<button key=${id} type="button" role="radio" aria-checked=${s.voiceLang === id ? 'true' : 'false'}
-            lang=${id === 'jp' ? 'ja' : 'zh'} class=${s.voiceLang === id ? 'is-on' : ''} onClick=${() => updateSettings({ voiceLang: id })}>${VOICE_LANG_NAMES[id]}</button>`)}
+          ${VOICE_LANGS.map((id) => html`<button key=${id} type="button" role="radio" aria-checked=${s.voiceLanguage === id ? 'true' : 'false'}
+            lang=${id === 'jp' ? 'ja' : 'zh'} class=${s.voiceLanguage === id ? 'is-on' : ''} onClick=${() => updateSettings({ voiceLanguage: id })}>${VOICE_LANG_NAMES[id]}</button>`)}
         </div>
       </div>
       <${Slider} label=${t('音效')} micro="SFX" icon="signal" value=${s.sfx}
@@ -278,6 +302,7 @@ export function SettingsModal({ open, onClose }) {
         </div>
       </div>
       <p class="set-hint set-textsize-note">${t('调整界面文字大小，棋盘保持原比例。')}</p>
+      <${PrivacySettings} s=${s} />
       <${HotkeySection} keys=${s.keys} touchUi=${touchUi} />
       <${DiagSection} />
       <p class="set-hint">${touchUi ? t('触屏操作：点击单位选中（撤退 / 出售）· 长按单位或卡牌查看详情 · 拖动部署后滑动选择朝向') : t('右键查看详情')}</p>

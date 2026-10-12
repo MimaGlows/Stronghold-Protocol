@@ -181,7 +181,7 @@ export function loadPref(key, fallback) {
  * @param {any} value
  */
 export function savePref(key, value) {
-  try { globalThis.localStorage?.setItem(`sp.pref.${key}`, JSON.stringify(value)); } catch { /* ignore */ }
+  try { if (!globalThis.localStorage) return false; globalThis.localStorage.setItem(`sp.pref.${key}`, JSON.stringify(value)); return true; } catch { return false; }
 }
 
 const identity = (s) => s;

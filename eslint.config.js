@@ -57,6 +57,7 @@ export default [
   {
     ignores: [
       'node_modules/**',
+      '.runtime/**',
       'public/vendor/**',
       'public/assets/**',
       'public/fonts/**',

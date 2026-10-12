@@ -96,7 +96,7 @@ export function ChessCard({ slot, idx, priv, frozen = false, reason = null, free
   const tap = () => { if (onTap) onTap(idx); else if (!disabled) onBuy(idx); else onDetail(slot.id, 'chess', hint); };
   const name = `${c?.name || t('干员')}${si ? t('（{note}）', { note: standInForText(c0.name) }) : ''}`;
   const card = html`<button type="button" class=${cx('scard', `scard--t${tier}`, frozen && 'is-frozen', disabled && 'is-disabled', willMerge && 'is-merge', armed && 'is-armed', si && 'is-standin')}
-      onClick=${tap} onContextMenu=${(e) => { e.preventDefault(); onDetail(slot.id, 'chess', hint); }}
+      data-comm=${free ? 'reward' : 'shop'} data-slot=${idx} data-id=${slot.id} onClick=${tap} onContextMenu=${(e) => { e.preventDefault(); onDetail(slot.id, 'chess', hint); }}
       aria-label=${`${t('{name}，价格 {price}', { name, price: slot.price })}${armed ? (disabled ? t('，无法购买') : t('，再次点击确认')) : ''}`} aria-pressed=${onTap ? String(!!armed) : undefined}>
     <span class="scard__bg" aria-hidden="true"></span>
     <span class="scard__water" aria-hidden="true">${bonds[0] ? html`<${BondGlyph} bondId=${bonds[0]} />` : null}</span>
@@ -158,7 +158,7 @@ export function ItemCard({ slot, idx, frozen = false, reason = null, free = fals
   const disabled = !!reason;
   const tap = () => { if (onTap) onTap(idx); else if (!disabled) onBuy(idx); else onDetail(slot.id, 'item'); };
   const card = html`<button type="button" class=${cx('scard', 'scard--item', frozen && 'is-frozen', disabled && 'is-disabled', armed && 'is-armed')}
-      onClick=${tap} onContextMenu=${(e) => { e.preventDefault(); onDetail(slot.id, 'item'); }}
+      data-comm=${free ? 'reward' : 'shop'} data-slot=${idx} data-id=${slot.id} onClick=${tap} onContextMenu=${(e) => { e.preventDefault(); onDetail(slot.id, 'item'); }}
       aria-label=${`${t('{name}，价格 {price}', { name: it?.name || t('装备'), price: slot.price })}${armed ? (disabled ? t('，无法购买') : t('，再次点击确认')) : ''}`}
       aria-pressed=${onTap ? String(!!armed) : undefined}>
     <span class="scard__bg" aria-hidden="true"></span>
@@ -198,7 +198,7 @@ function LevelCard({ shop, reason, armed = false, onTap }) {
   const lv = shop?.level ?? 1;
   const max = lv >= (shop?.maxLevel ?? 6);
   const price = shop?.upgradePrice ?? 0;
-  return html`<button type="button" class=${cx('lvcard', max && 'is-max', reason && 'is-disabled', armed && 'is-armed')} onClick=${() => !reason && onTap()}
+  return html`<button type="button" data-comm="level" class=${cx('lvcard', max && 'is-max', reason && 'is-disabled', armed && 'is-armed')} onClick=${() => !reason && onTap()}
       title=${reason || (armed ? t('再次点击确认升级（{price} 资金）', { price }) : t('升级调度中心（{price} 资金） · {key}', { price, key: hotkeyLabelOf('levelUp') }))} aria-disabled=${reason ? 'true' : 'false'}
       aria-pressed=${String(!!armed)}>
     ${!max ? html`<${HexBadge} value=${price} tone=${reason && reason !== t('调度中心已达最高等级') ? 'dark' : 'gold'} size="md" class="lvcard__price" />` : null}
@@ -293,7 +293,7 @@ export function RewardCards({ offer, priv, editable, onPick, onDetail, onLater, 
  *   the bonds this mode never activates (gameLogic modeOffBonds), struck through on the operator cards
  */
 export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel, onRefresh, onFreeze, onDetail, onDetailClose, onRefuse, barRef,
-  reward = null, onReward, onRewardLater, onArm = null, offBonds = null }) {
+  reward = null, onReward, onRewardLater, onArm = null, offBonds = null, readOnly = false }) {
   const shop = priv?.shop || {};
   const slots = Array.isArray(shop.slots) ? shop.slots : [];
   const chessSlots = slots.map((s, i) => ({ s, i })).filter(({ s }) => !s || s.kind !== 'item');
@@ -316,7 +316,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
     slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey(s.kind === 'item' ? 'i' : 'c', i, s)); });
     if (showReward) reward.slots.forEach((s, i) => { if (s && !s.sold) keys.add(armKey('r', i, s)); });
   }
-  const [armed, setArmed] = useTwoTap({ editable, keys });
+  const [armed, setArmed] = useTwoTap({ editable: editable && !readOnly, keys });
   // the armed card's slot (game.js lights the tile a merge's elite will take — gameLogic.mergeTarget); kept before the
   // collapsed tab's early return (hook order)
   const armedSlot = armedSlotOf(armed, slots, showReward ? reward.slots : null);
@@ -325,6 +325,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
   useEffect(() => () => onArm?.(null), []);
   /** First tap arms + opens the detail; the second buys (or says why it can't). */
   const tapCard = (kind, idx, slot, detailKind, reason, buy) => {
+    if (readOnly) { onDetail(slot.id, detailKind); return; }
     const key = armKey(kind, idx, slot);
     if (armed !== key) { setArmed(key); onDetail(slot.id, detailKind, detailKind === 'chess' ? mergeHint(priv, slot.id) : null); return; }
     if (reason) { onRefuse?.(reason); return; }
@@ -333,6 +334,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
     buy(idx);
   };
   const tapLevel = () => {
+    if (readOnly) return;
     if (armed !== levelKey) { setArmed(levelKey); return; }
     setArmed(null);
     onLevel();
@@ -340,7 +342,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
 
   if (collapsed) {
     return html`<div class="shopbar-tab" ref=${barRef}>
-      <div class="shopbar-tab__funds"><${CoinGlyph} /><b class="num">${funds}</b></div>
+      <div class="shopbar-tab__funds" data-comm="funds"><${CoinGlyph} /><b class="num">${funds}</b></div>
       <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)}><${Icon} name="chevronLeft" />${t('展开商店')}</button>
     </div>`;
   }
@@ -349,12 +351,12 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
   return html`<section class=${cx('shopbar', frozen && 'is-frozen', !editable && 'is-locked', showReward && 'has-reward', armed && 'has-armed')} ref=${barRef} aria-label=${t('调度中心')}>
     <div class="shopbar__tools">
       <span class="shopbar__remain">${t('剩余可放置角色：')}<b class=${cx('num', remaining === 0 && 't-orange')}>${remaining}</b></span>
-      <button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${!!frzReason} onClick=${onFreeze}
+      <button type="button" class=${cx('toolbtn', 'toolbtn--ice', frozen && 'is-on')} disabled=${readOnly || !!frzReason} onClick=${onFreeze}
         title=${frzReason || (frozen ? t('解冻商店 · {key}', { key: hk.freeze }) : t('冻结商店（下回合保留） · {key}', { key: hk.freeze }))}>
         <${Img} src=${uiUrl(data.get('assets'), frozen ? 'shopPanel/frozen_icon2' : 'shopPanel/frozen_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="snow" />`} />
         <span>${frozen ? t('解冻') : t('冻结')}</span><kbd>${hk.freeze}</kbd>
       </button>
-      <button type="button" class="toolbtn toolbtn--amber" disabled=${!!refReason} onClick=${onRefresh} title=${refReason || t('刷新商店 · {key}', { key: hk.refresh })}>
+      <button type="button" class="toolbtn toolbtn--amber" disabled=${readOnly || !!refReason} onClick=${onRefresh} title=${refReason || t('刷新商店 · {key}', { key: hk.refresh })}>
         <${Img} src=${uiUrl(data.get('assets'), 'shopPanel/refresh_icon')} class="toolbtn__img" fallback=${html`<${Icon} name="refresh" />`} />
         <span>${t('刷新')}</span>
         ${free > 0 ? html`<span class="toolbtn__free">${t('免费 ×{free}', { free })}</span>` : html`<${HexBadge} value=${shop.refreshPrice ?? 1} tone=${refReason ? 'dark' : 'gold'} size="sm" />`}
@@ -363,7 +365,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
     </div>
     <div class="shopbar__row">
       <${LevelCard} shop=${shop} reason=${lvReason} armed=${armed === levelKey} onTap=${tapLevel} />
-      ${showReward ? html`<${RewardCards} offer=${reward} priv=${priv} editable=${editable} onPick=${onReward} onDetail=${onDetail} onLater=${onRewardLater}
+      ${showReward ? html`<${RewardCards} offer=${reward} priv=${priv} editable=${editable && !readOnly} onPick=${onReward} onDetail=${onDetail} onLater=${onRewardLater}
           armed=${armed} onTap=${tapCard} offBonds=${offBonds} />`
         : html`<div class="shopbar__cards">
         ${chessSlots.map(({ s, i }) => {
@@ -371,7 +373,7 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
           if (s.sold) return html`<${SoldCard} key=${`s${i}`} />`;
           const reason = shopBlockReason('buy', { priv, editable, slot: s, ...LOOKUPS });
           return html`<${ChessCard} key=${`c${i}:${s.id}`} slot=${s} idx=${i} priv=${priv} frozen=${slotFrozen(s, frozen)} onBuy=${onBuy} onDetail=${onDetail} offBonds=${offBonds}
-              reason=${reason} armed=${armed === armKey('c', i, s)} onTap=${editable ? (idx) => tapCard('c', idx, s, 'chess', reason, onBuy) : null} />`;
+              reason=${reason} armed=${armed === armKey('c', i, s)} onTap=${editable || readOnly ? (idx) => tapCard('c', idx, s, 'chess', reason, onBuy) : null} />`;
         })}
       </div>`}
       <div class="shopbar__item">
@@ -380,12 +382,12 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
             if (s.sold) return html`<${SoldCard} key=${`is${i}`} item=${true} />`;
             const reason = shopBlockReason('buy', { priv, editable, slot: s, ...LOOKUPS });
             return html`<${ItemCard} key=${`i${i}:${s.id}`} slot=${s} idx=${i} frozen=${slotFrozen(s, frozen)} onBuy=${onBuy} onDetail=${onDetail} reason=${reason}
-              armed=${armed === armKey('i', i, s)} onTap=${editable ? (idx) => tapCard('i', idx, s, 'item', reason, onBuy) : null} />`;
+              armed=${armed === armKey('i', i, s)} onTap=${editable || readOnly ? (idx) => tapCard('i', idx, s, 'item', reason, onBuy) : null} />`;
           })
           : html`<${SoldCard} item=${true} />`}
       </div>
       <div class="funds">
-        <div class="funds__hex">
+        <div class="funds__hex" data-comm="funds">
           <${CoinGlyph} class="funds__coin" />
           <b class="funds__num num">${funds}</b>
         </div>

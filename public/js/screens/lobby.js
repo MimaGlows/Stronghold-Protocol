@@ -11,16 +11,19 @@
 // Texts go through t() (docs/I18N.md); the module-level tables hold msgids (N_) translated where they are shown, the
 // config.json mode texts come localized from data.js.
 
-import { ResumeMatchButton } from '../ui/resumeMatch.js';
+import { ContinueMatchButton } from '../ui/continueMatch.js';
+import { HostingCredit } from '../ui/hostingCredit.js';
+import { requestInvitePermissionOnGesture } from '../ui/social.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
-import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo } from '../ui/components.js';
+import { html, Button, Icon, MicroLabel, Panel, TextField, PingPill, Tooltip, Spinner, DifficultyIcon, doctorNo } from '../ui/components.js';
 import { toast, toastError } from '../ui/toasts.js';
 import { GuideButton } from '../ui/guide.js';
 import { openStats } from './stats.js';
 import { SettingsButton } from '../ui/settings.js';
 import { PwaInstallButton } from '../ui/device.js';
 import { LoadoutButton } from './loadout.js';
+import { AvatarButton } from '../ui/avatarPicker.js';
 import { net, identity } from '../net.js';
 import { store, useStore, shallowEqual, loadPref, savePref } from '../store.js';
 import { getConfig, getMode, getStage, useData } from '../data.js';
@@ -272,7 +275,7 @@ export function LobbyScreen() {
       if (alive.current) setBusy(null);
     }
   };
-  const create = () => run('create', () => net.request('room.create', { mode: roomMode, difficulty }));
+  const create = () => { requestInvitePermissionOnGesture(); return run('create', () => net.request('room.create', { mode: roomMode, difficulty })); };
   const join = (c = code) => {
     // `onClick=${join}` hands the click EVENT as the first argument, and a default parameter only applies to
     // `undefined` — codeArg keeps an event target out of the key and falls back to the input field
@@ -321,16 +324,16 @@ export function LobbyScreen() {
         <h1 class="topbar__title">${t('选择模拟协议')}</h1>
       </div>
       <div class="topbar__right">
-        <${ResumeMatchButton} />
+        <${ContinueMatchButton} />
         <${LoadoutButton} from="lobby" size="sm" class="lobby-loadout" label=${t('干员调配')} />
-        <button type="button" class="me-chip me-chip--btn stats-entry" onClick=${openStats} title=${t('统计数据')} aria-label=${t('统计数据')}>
-          <${AvatarFrame} size="sm" name=${me.name} seat=${0} self=${true} />
-          <span class="me-chip__text">
+        <div class="me-chip">
+          <${AvatarButton} size="sm" name=${me.name} avatar=${me.avatar} seat=${0} self=${true} />
+          <button type="button" class="me-chip__text stats-entry" onClick=${openStats} title=${t('统计数据')} aria-label=${t('统计数据')}>
             <span class="me-chip__name">${me.name || t('博士')}</span>
-            <${MicroLabel}>${me.playerId != null ? `DOCTOR #${doctorNo(me.playerId)}` : 'DOCTOR'}<//>
-          </span>
+            <${MicroLabel}>${me.playerId != null ? `DOCTOR #${me.doctorCode || doctorNo(me.playerId)}` : 'DOCTOR'}<//>
+          </button>
           <${Icon} name="chart" class="me-chip__stats" />
-        </button>
+        </div>
       </div>
     </header>
 
@@ -380,5 +383,6 @@ export function LobbyScreen() {
         </div>
       </section>
     </div>
+    <footer class="local-hosting-footer"><${HostingCredit} /></footer>
   </div>`;
 }

@@ -44,6 +44,7 @@ const cx = (...parts) => parts.flat().filter(Boolean).join(' ');
 export const ICONS = {
   check: { d: 'M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z' },
   close: { d: 'M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z' },
+  thumbsUp: { d: 'M2 10h4v11H2zM8 10l5-7c.6-.9 2-.5 2 .6V8h5a2 2 0 0 1 2 2.4l-1.5 8.2A3 3 0 0 1 17.6 21H8z' },
   exit: { d: 'M20 3H10v2h8v14h-8v2h10zM8.4 7.4 7 6l-6 6 6 6 1.4-1.4L4.8 13H15v-2H4.8z' },
   crown: { d: 'M3 7l4.6 4.2L12 4l4.4 7.2L21 7l-1.8 10H4.8zM5 19h14v2H5z' },
   robot: { d: 'M11 2h2v3h4a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h4zM8.5 9.5a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5zm7 0a1.75 1.75 0 1 0 0 3.5 1.75 1.75 0 0 0 0-3.5zM9 15v1.6h6V15zM1 10h2v5H1zm20 0h2v5h-2z', eo: true },
@@ -717,7 +718,7 @@ export function AvatarFrame({ name = '', src, size = 'md', seat = 0, host, bot, 
       ready && 'is-ready', offline && 'is-offline', dead && 'is-dead', empty && 'is-empty', cls)} style=${`--seat-hue:${hue}`}>
     <div class="avatar__img">
       ${empty ? html`<${Icon} name="plus" class="avatar__empty" />`
-        : imgOk ? html`<img src=${src} alt="" draggable=${false} onError=${() => setBadSrc(src)} />`
+        : imgOk ? html`<img src=${src} alt="" loading="lazy" draggable=${false} onError=${() => setBadSrc(src)} />`
         : bot ? html`<${Icon} name="robot" class="avatar__bot" />`
         : html`<span class="avatar__glyph">${glyph}</span>`}
     </div>
@@ -735,17 +736,18 @@ export function AvatarFrame({ name = '', src, size = 'md', seat = 0, host, bot, 
  *   duration?: number, onDone?: Function, class?: string }} props
  *   mode 'overlay' = fixed over the screen; duration (ms) > 0 auto-hides then calls onDone. Re-key to replay.
  */
-export function PhaseBanner({ title, sub, micro, tone = 'mint', mode = 'inline', duration = 0, onDone, class: cls }) {
+export function PhaseBanner({ title, sub, micro, tone = 'mint', mode = 'inline', duration = 0, onDone, class: cls, elapsed = null }) {
   const [leaving, setLeaving] = useState(false);
   const [gone, setGone] = useState(false);
   useEffect(() => {
-    if (!(duration > 0)) return undefined;
+    if (!(duration > 0) || elapsed != null) return undefined;
     const t1 = setTimeout(() => setLeaving(true), duration);
     const t2 = setTimeout(() => { setGone(true); onDone?.(); }, duration + 260);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [duration]);
-  if (gone) return null;
-  return html`<div class=${cx('pbanner', `pbanner--${tone}`, `pbanner--${mode}`, leaving && 'is-leaving', cls)} role="status" aria-live="polite">
+  if (gone || elapsed != null && elapsed > duration + 260) return null;
+  const replayStyle = elapsed == null ? null : `--replay-animation-delay:-${Math.max(0, elapsed >= duration ? elapsed - duration : elapsed)}ms`;
+  return html`<div style=${replayStyle} class=${cx('pbanner', `pbanner--${tone}`, `pbanner--${mode}`, (leaving || elapsed != null && elapsed >= duration) && 'is-leaving', elapsed != null && 'is-replay-clock', cls)} role="status" aria-live="polite">
     <div class="pbanner__band">
       <${Chevrons} count=${4} tone=${tone} class="pbanner__chev pbanner__chev--l" />
       <div class="pbanner__text">
@@ -766,17 +768,17 @@ export function PhaseBanner({ title, sub, micro, tone = 'mint', mode = 'inline',
  * @param {{ title: any, sub?: any, micro?: string, tone?: 'mint'|'orange'|'red', duration?: number, onDone?: Function }} props
  *   duration (ms) > 0 auto-hides then calls onDone. Re-key to replay.
  */
-export function ResultDialog({ title, sub, micro, tone = 'mint', duration = 2800, onDone }) {
+export function ResultDialog({ title, sub, micro, tone = 'mint', duration = 2800, onDone, elapsed = null }) {
   const [leaving, setLeaving] = useState(false);
   const [gone, setGone] = useState(false);
   useEffect(() => {
-    if (!(duration > 0)) return undefined;
+    if (!(duration > 0) || elapsed != null) return undefined;
     const t1 = setTimeout(() => setLeaving(true), duration);
     const t2 = setTimeout(() => { setGone(true); onDone?.(); }, duration + 300);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [duration]);
-  if (gone) return null;
-  return html`<div class=${cx('rdialog', `rdialog--${tone}`, leaving && 'is-leaving')} role="status" aria-live="polite">
+  if (gone || elapsed != null && elapsed > duration + 300) return null;
+  return html`<div style=${elapsed == null ? null : `--replay-animation-delay:-${Math.max(0, elapsed >= duration ? elapsed - duration : elapsed)}ms`} class=${cx('rdialog', `rdialog--${tone}`, (leaving || elapsed != null && elapsed >= duration) && 'is-leaving', elapsed != null && 'is-replay-clock')} role="status" aria-live="polite">
     <div class="rdialog__box">
       <span class="rdialog__tick rdialog__tick--tl"></span><span class="rdialog__tick rdialog__tick--tr"></span>
       <span class="rdialog__tick rdialog__tick--bl"></span><span class="rdialog__tick rdialog__tick--br"></span>
@@ -855,9 +857,10 @@ export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
  * Bracketed text input.
  * @param {{ label?: any, micro?: string, value: string, onInput: (v: string) => void, onEnter?: Function,
  *   placeholder?: string, maxLength?: number, transform?: (v: string) => string, autoFocus?: boolean,
- *   disabled?: boolean, size?: 'md'|'lg'|'code', icon?: string, class?: string, inputRef?: any, name?: string }} props
+ *   disabled?: boolean, size?: 'md'|'lg'|'code', icon?: string, class?: string, inputRef?: any, name?: string,
+ *   inputMode?: string, pattern?: string, ariaLabel?: string }} props
  */
-export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, size = 'md', icon, class: cls, inputRef, name, hint, invalid }) {
+export function TextField({ label, micro, value, onInput, onEnter, placeholder, maxLength, transform, autoFocus, disabled, size = 'md', icon, class: cls, inputRef, name, hint, invalid, inputMode, pattern, ariaLabel }) {
   const localRef = useRef(null);
   const ref = inputRef || localRef;
   const composing = useRef(false);
@@ -878,7 +881,7 @@ export function TextField({ label, micro, value, onInput, onEnter, placeholder, 
     <span class="field__box brackets">
       ${icon ? html`<${Icon} name=${icon} class="field__icon" />` : null}
       <input id=${id} ref=${ref} class="field__input" name=${name} value=${value} placeholder=${placeholder}
-        maxLength=${maxLength} disabled=${disabled} autocomplete="off" spellcheck=${false}
+        maxLength=${maxLength} disabled=${disabled} inputmode=${inputMode} pattern=${pattern} aria-label=${ariaLabel} autocomplete="off" spellcheck=${false}
         onInput=${handle}
         oncompositionstart=${() => { composing.current = true; }}
         oncompositionend=${(e) => { composing.current = false; handle(e); }}

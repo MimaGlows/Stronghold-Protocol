@@ -12,7 +12,7 @@ import { net } from '../net.js';
 import { store, useStore, shallowEqual, emptyMatch, createStore, isSpectating } from '../store.js';
 import { GIcon } from './gameComponents.js';
 import { GuideButton } from './guide.js';
-import { recordQuit } from './stats.js';
+
 import { t, tParts, N_ } from '../../../shared/i18n.js';
 
 /**
@@ -39,12 +39,11 @@ store.subscribe((s, prev) => { if (awayStore.get().away && awayEnds(s, prev)) aw
 
 /**
  * Leave the match for good (g.leave → room.leave), then drop local room/match state. The server sends a leaver no
- * settlement, so the page records the match itself before it is cleared (本机统计, ui/stats.js recordQuit: a 中途退出
+ * settlement; the server records the departure before acknowledging it. (A 中途退出
  * entry of the history; it counts only when a round had been cleared) — once the leave went through.
  * @returns {Promise<void>}
  */
 export async function quitMatch() {
-  const before = store.get();
   let left = false;
   try {
     try { await net.request('g.leave', {}); } catch (err) {
@@ -57,7 +56,7 @@ export async function quitMatch() {
   } finally {
     // (a settlement that arrived while the leave was in flight is the match's record already)
     if (left && !store.get().match.result) {
-      try { recordQuit(before); } catch (err) { console.warn('[stats] quit record failed', err); }
+      // The server persists this departure before acknowledging it.
     }
     store.set({ room: null, match: emptyMatch() });
   }
@@ -123,13 +122,13 @@ export function AwayOverlay({ onBack = () => {} }) {
  * Pre-game step header.
  * @param {{ step: number, of: number, title: string, micro: string, pub: any, total?: number|null, onExit: Function }} props
  */
-export function StepHeader({ step, of, title, micro, pub, total, onExit }) {
+export function StepHeader({ step, of, title, micro, pub, total, onExit, replay = null }) {
   const conn = useStore((s) => s.connection, shallowEqual);
   return html`<header class="stephead">
     <div class="stephead__left">
       <${Button} variant="danger" size="lg" square=${true} icon="exit" onClick=${onExit} aria-label=${t('离开')} title=${t('离开')} />
       <div class="stephead__meta">
-        <${PingPill} ms=${conn.ping} online=${conn.status === 'online'} />
+        ${replay ? html`<span class="ping ping--low">${t('回放')}</span>` : html`<${PingPill} ms=${conn.ping} online=${conn.status === 'online'} />`}
         ${pub?.difficulty ? html`<${DifficultyTag} difficulty=${pub.difficulty} />` : null}
       </div>
     </div>
@@ -139,7 +138,7 @@ export function StepHeader({ step, of, title, micro, pub, total, onExit }) {
     </div>
     <div class="stephead__right">
       <${GuideButton} class="stephead__guide" variant="secondary" />
-      <${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />
+      ${replay ? html`<${Countdown} seconds=${pub?.deadline > 0 ? Math.max(0, Math.ceil((pub.deadline - replay.frozenAt) / 1000)) : null} total=${total ?? undefined} size="md" />` : html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="md" />`}
     </div>
   </header>`;
 }

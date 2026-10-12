@@ -905,13 +905,8 @@ round was over. The official 1 s `broadcastBeginDelay` is not modelled.
   merge's would — onto the tile of a consumed deployed copy (PRTS 卫戍协议/帮助 "若消耗已部署至作战区的干员，则发送至作战区
   对应位置"), else to the hand, overflowing into temp (temp pieces that arrive after the prep wait through the next prep).
 
-## Opening rerolls and bot reactions (0.2.3)
 
-`match/setupVote.js` owns the INFO_CHECK vote and transactional opening replacement; `Lobby.rerollSetup` checks host
-permission for `room.rerollSetup {setupRevision}` and `room.cancelReroll {voteId}`. Participants send
-`g.rerollVote {voteId, agree}`; `g.infoReady {setupRevision?}` accepts an omitted revision only before the first reroll.
-`m.public` includes `setupRevision` and `rerollVote` (null or `{id, proposerId, voters, agreed}`). Old vote/revision
-requests cannot affect a new opening. See DESIGN §28.21 for cancellation and timer behavior.
+## Windows 定制：服务器伪账号统计（2026-10-09）
 
 `botEmotes.js` is isolated from bot decisions and RNG. It sends the existing `m.emote` only in mixed matches, under
 normal cooldown/whitelist rules; `SP_BOT_EMOTES=0` disables it. The cooperation score in `bot.js` and these cosmetic
@@ -937,3 +932,9 @@ Operator capacities use measured single-player exceptions and twice those counts
 `take(..., { overdraw: true })` records full occupation of a granted/promoted elite or a Mimic copy beyond capacity;
 normal takes remain bounded. Negative internal balance is a deficit, never negative available stock. Existing
 item selection probabilities and explicit grant weights remain unchanged.
+
+“统计”的总览、策略、战斗累计和对局记录属于完整博士代号与四位编号，持久化于服务器档案 statistics（v=1、revision、records）。沿用官方计数口径与最近 1000 条上限。客户端不提交统计写入，不再提供导出、导入或清空。首页和选择页的独立游玩记录入口移除；记录详情、回放与分享使用同一统计历史入口。
+
+新增 C2S profile.stats.get {offset?}，服务端仅查询当前会话账号；S2C profile.stats 携带 profileKey、revision、aggregate、total、records、offset、next，每页最多 50 条且列表行限制 40 KiB。welcome 携带 statsRevision，不携带整个历史；profile.stats.changed 提示刷新。分页修订号变化时重新读取第一页，账号切换和异步响应均校验身份。
+
+服务端正常结算或永久离场后原子保存，以稳定局号去重。退出记录不会被队友后续结算覆盖；暂时断线不是退出，观战和 AI 不产生账号统计。每账号最近 30 条记录含退出，仅正常结算可保存回放；跨账号共享文件在所有参与账号均失去资格后清理。回放 HTTP 增加 owner 查询参数和账号范围能力密钥，旧接口及匿名分享继续兼容。72 小时限制取消，内容版本规则保留；已失效帧不恢复。

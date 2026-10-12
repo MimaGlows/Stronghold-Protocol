@@ -46,20 +46,20 @@ describe('rebindable shortcuts (设置 → 快捷键)', { skip: !ENABLED && 'set
       const problems = await open(page);
       await page.click('.gm__gear');
       await page.waitForSelector('.modal .set-keys');
-      assert.deepEqual(await page.$$eval('.set-key[data-action]', (els) => els.map((el) => el.textContent.trim())), ['R', 'F', 'D', 'Q', 'X', 'Space'],
-        'the defaults are the keys of 0.1.4');
+      assert.deepEqual(await page.$$eval('.set-key[data-action]', (els) => els.map((el) => el.textContent.trim())), ['R', 'F', 'D', 'Q', 'C', 'Space', 'Z', 'X'],
+        'the current defaults include ping and radio');
 
-      // a swap: 撤退 onto X (出售's key) — 出售 takes the old Q, and the line under the list says so
+      // a swap: 撤退 onto C (出售's key) — 出售 takes the old Q, and the line under the list says so
       await page.click('.set-key[data-action="retreat"]');
       await page.waitForSelector('.set-key.is-waiting[data-action="retreat"]');
       assert.match(await note(page), /请按下「撤退选中干员」的新按键（Esc 取消）/);
-      await page.keyboard.press('KeyX');
-      await keyIs(page, 'retreat', 'X');
+      await page.keyboard.press('KeyC');
+      await keyIs(page, 'retreat', 'C');
       assert.equal(await keyOf(page, 'sell'), 'Q');
-      assert.match(await note(page), /「撤退选中干员」已改为 X；「出售选中干员」原来用 X，已换成 Q/);
+      assert.match(await note(page), /「撤退选中干员」已改为 C；「出售选中干员」原来用 C，已换成 Q/);
       await page.click('.set-keys__reset');
       await keyIs(page, 'retreat', 'Q');
-      assert.equal(await keyOf(page, 'sell'), 'X');
+      assert.equal(await keyOf(page, 'sell'), 'C');
       assert.match(await note(page), /已恢复默认快捷键/);
       assert.equal(await page.$eval('.set-keys__reset', (el) => el.disabled), true, '恢复默认 is off at the defaults');
 
@@ -129,7 +129,7 @@ describe('rebindable shortcuts (设置 → 快捷键)', { skip: !ENABLED && 'set
         return { scroll: body.scrollWidth, client: body.clientWidth, left: b.left, right: b.right, rows: rows.map((r) => [r.left, r.right, r.width]) };
       });
       assert.ok(box.scroll <= box.client, `no horizontal scroll in the dialog (${box.scroll} > ${box.client})`);
-      assert.equal(box.rows.length, 7, 'six shortcuts and the fixed Esc');
+      assert.equal(box.rows.length, 9, 'eight shortcuts and the fixed Esc');
       for (const [l, r, w] of box.rows) assert.ok(l >= box.left - 0.5 && r <= box.right + 0.5 && w > 0, `a row inside the dialog: ${l}–${r}`);
       assert.equal(new Set(box.rows.map(([l]) => Math.round(l))).size, 1, 'one column at phone width');
       await page.$eval('.set-keys__more', (el) => el.scrollIntoView({ block: 'start' }));

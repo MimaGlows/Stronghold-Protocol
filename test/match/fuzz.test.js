@@ -34,6 +34,8 @@ function randomIntent(rng, m, ps) {
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
     case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };
+    case 'g.ping': return { t, round: Math.max(1, m.round), phase: 'PREP', target: { kind: 'tile', playerId: ps.playerId, row: 9 + rng.int(4), col: 2 + rng.int(9), intent: rng.pick(['location', 'danger', 'missing', 'good']) } };
+    case 'g.radio': return { t, round: Math.max(1, m.round), phase: 'PREP', id: rng.int(5) };
     case 'g.emote': return { t, id: rng.pick(EMOTES) };
     case 'g.watch': return { t, fieldId: rng.pick(['n:p_0', 'n:p_1', 'n:ai_0', 'u', 'b1', 'b2', 'zz', '']) };
     case 'g.autoplay': return { t, on: rng() < 0.05 };

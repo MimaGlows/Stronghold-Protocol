@@ -32,6 +32,7 @@
 
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/avatar.css" />
   <link rel="stylesheet" href="/css/screens/title.css" />
   <link rel="stylesheet" href="/css/screens/lobby.css" />
   <link rel="stylesheet" href="/css/screens/room.css" />
@@ -45,6 +46,9 @@
   <link rel="stylesheet" href="/css/screens/loadout.css" />
   <link rel="stylesheet" href="/css/screens/stats.css" />
   <link rel="stylesheet" href="/css/emotes.css" />
+  <link rel="stylesheet" href="/css/replay.css" />
+  <link rel="stylesheet" href="/css/social.css" />
+  <link rel="stylesheet" href="/css/communications.css" />
   <link rel="stylesheet" href="/css/devices.css" />
 
   <script type="importmap">
@@ -58,6 +62,7 @@
        at low priority so entering the match doesn't wait on ~800 KB of script. -->
   <link rel="prefetch" href="/vendor/pixi.min.js" as="script" />
   <link rel="prefetch" href="/vendor/pixi-spine.js" as="script" />
+  <link rel="stylesheet" href="/hosting/footer.css">
 </head>
 <body>
   <div id="app"></div>
@@ -109,5 +114,6 @@
       if (b && !b.classList.contains('is-done') && e && !e.textContent) e.textContent = '加载时间较长…如长时间无响应，请使用最新版 Chrome / Edge / Safari / Firefox 并刷新页面。';
     }, 9000);
   </script>
+  <script type="module" src="/hosting/footer.js"></script>
 </body>
 </html>

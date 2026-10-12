@@ -23,6 +23,11 @@
 // The server only auto-listens when this file is the process entry point.
 
 import http from 'node:http';
+import path from 'node:path';
+import { AccountStats } from './profiles/stats.js';
+import { ProfileStore } from './profiles/store.js';
+import { ReplayArchive } from './replays/archive.js';
+import { AVATAR_COOKIE_HEADER_LIMIT } from '../shared/avatar.js';
 import { getData, loadData } from './data.js';
 import { ROOT, listenAddress, bindCandidates, serveDirs, makeLogger, parseTrustProxy } from './http/config.js';
 import { WS_MAX_PAYLOAD, createSessionStack, attachWebSocket } from './http/websocket.js';
@@ -45,7 +50,7 @@ export {
  * @param {{
  *   port?: number, host?: string, quiet?: boolean, log?: object,
  *   publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string,
- *   MatchClass?: Function, seedFn?: () => number,
+ *   MatchClass?: Function, seedFn?: () => number, recording?: boolean, replayDir?: string, replayArchive?: ReplayArchive,
  *   lobbyGraceMs?: number, reconnectWindowMs?: number, heartbeatMs?: number, helloTimeoutMs?: number,
  *   ratePerSec?: number, rateBurst?: number, maxConnections?: number, maxRooms?: number,
  *   maxConnectionsPerAddr?: number, maxRoomsPerAddr?: number, maxMatchesPerAddr?: number, resyncMinGapMs?: number,
@@ -54,7 +59,7 @@ export {
  * @returns {Promise<{ port: number, host: string, url: string, server: http.Server, wss: import('ws').WebSocketServer,
  *                     lobby: import('./lobby.js').Lobby, network: import('./net.js').Network,
  *                     registry: import('./net.js').SessionRegistry, packs: ReturnType<typeof createPackRegistry>,
- *                     close: () => Promise<void> }>}
+ *                     replays: ReplayArchive|null, close: () => Promise<void> }>}
  */
 export async function startServer(opts = {}) {
   const { port, host } = listenAddress(opts);
@@ -63,7 +68,10 @@ export async function startServer(opts = {}) {
 
   // The process-wide singleton serves the default data dir; a custom dir (tests) gets its own copy.
   const data = opts.dataDir ? loadData(dataDir, { log }) : getData({ dir: dataDir, log });
-  const { registry, lobby, network } = createSessionStack(opts, { data, log });
+  const replays = opts.replayArchive || (opts.recording === false || (opts.port === 0 && !opts.replayDir) ? null : new ReplayArchive(opts.replayDir || path.join(ROOT, 'logs/replays'), log));
+  const { registry, lobby, network } = createSessionStack({ ...opts, replayArchive: replays, profiles: opts.profileStore || (opts.profileDir || replays ? new ProfileStore(opts.profileDir || path.join(replays.dir, 'profiles')) : null) }, { data, log });
+  if (lobby.profiles) lobby.accountStats = new AccountStats(lobby.profiles, replays, log);
+  lobby.social.migrate();
   // content packs (docs/PACKS.md): scanned now — the start log names them — and again whenever their folders change
   const packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
   packs.refresh(true);
@@ -73,7 +81,7 @@ export async function startServer(opts = {}) {
   resetBuildTag();
   buildTag();
 
-  const server = http.createServer(createRequestHandler({ serveStatic, health: { startedAt, network, registry, lobby }, log }));
+  const server = http.createServer({ maxHeaderSize: AVATAR_COOKIE_HEADER_LIMIT }, createRequestHandler({ serveStatic, replays, health: { startedAt, network, registry, lobby }, log }));
   server.on('clientError', answerClientError);
   const wss = attachWebSocket(server, { network, log });
 
@@ -107,6 +115,7 @@ export async function startServer(opts = {}) {
     if (bound === null) throw lastError;
     boundHost = bound;
   } catch (e) {
+    await replays?.close();
     network.close(); // stop heartbeat/sweep timers of the half-built server
     throw e;
   }
@@ -121,6 +130,7 @@ export async function startServer(opts = {}) {
     if (closing) return closing;
     closing = (async () => {
       try { lobby.shutdown('shutdown'); } catch (e) { log.error('[shutdown] lobby', e); }
+      await replays?.close();
       network.close();
       await new Promise((resolve) => {
         server.close(() => resolve());
@@ -132,7 +142,7 @@ export async function startServer(opts = {}) {
     return closing;
   }
 
-  return { port: actualPort, host: boundHost, url, server, wss, lobby, network, registry, packs, close };
+  return { port: actualPort, host: boundHost, url, server, wss, lobby, network, registry, packs, replays, close };
 }
 
 // `node server/index.js` / npm start: listen, print the banner, stop on SIGINT / SIGTERM (http/boot.js).

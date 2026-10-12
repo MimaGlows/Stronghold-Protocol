@@ -94,8 +94,8 @@ export function pickBusy(busyIdx, card, mine) {
  * @param {any} sp normalizeSp(...) @param {{ idx: number, takenBy?: string|null, soldOut?: boolean } | null | undefined} card
  * @param {{ myId: string, solo: boolean, busyIdx?: number|null }} o
  */
-export function cardPickable(sp, card, { myId, solo, busyIdx = null }) {
-  if (!sp || !card) return false;
+export function cardPickable(sp, card, { myId, solo, busyIdx = null, readOnly = false }) {
+  if (readOnly || !sp || !card) return false;
   const myTurn = solo || sp.turnPid === myId;
   return myTurn && sp.pickOf.get(myId) == null && !card.takenBy && !card.soldOut && busyIdx == null;
 }
@@ -130,9 +130,9 @@ export function armedCard(armed, sp, o) {
  * @param {{ pub:any, sp:any, myId:string, solo:boolean, personal?:boolean, onPick:(idx:number)=>void, busyIdx?:number|null, total?:number|null }} props
  */
 export function ChoiceOverlay(props) {
-  const { sp, myId, solo, busyIdx = null, onPick } = props;
+  const { sp, myId, solo, busyIdx = null, onPick, readOnly = false } = props;
   const [sel, setSel] = useState(null);
-  const armed = armedCard(sel, sp, { myId, solo, busyIdx });
+  const armed = armedCard(sel, sp, { myId, solo, busyIdx, readOnly });
   // a selection whose card cannot be picked any more (taken, the turn moved on, a pick in flight) is dropped
   useEffect(() => { if (sel != null && armed == null) setSel(null); }, [sel, armed]);
   useEffect(() => {
@@ -144,7 +144,7 @@ export function ChoiceOverlay(props) {
   if (!sp) return null;
   const tap = (idx) => {
     const card = sp.cards.find((c) => c && c.idx === idx);
-    const r = spTap(armed, idx, cardPickable(sp, card, { myId, solo, busyIdx }));
+    const r = spTap(armed, idx, cardPickable(sp, card, { myId, solo, busyIdx, readOnly }));
     setSel(r.armed);
     if (r.pick != null) onPick(r.pick);
   };
@@ -157,7 +157,7 @@ export function ChoiceOverlay(props) {
  * @param {{ pub:any, sp:any, myId:string, solo:boolean, personal?:boolean, busyIdx?:number|null, total?:number|null, armed?:number|null,
  *   onTap?:(idx:number)=>void, onConfirm?:()=>void, onDisarm?:()=>void }} props
  */
-export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = null, total = null, armed = null, onTap = () => {}, onConfirm = () => {}, onDisarm = () => {} }) {
+export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = null, total = null, armed = null, onTap = () => {}, onConfirm = () => {}, onDisarm = () => {}, readOnly = false, frozenAt = null }) {
   if (!sp) return null;
   const fam = data.get('choices')?.families?.[sp.family] || null;
   const rawFam = data.getRaw('choices')?.families?.[sp.family] || null;
@@ -193,7 +193,7 @@ export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = nu
             : html`<span class="spov__turntxt">${t('{turnName} 正在决策…', { turnName })}<${Icon} name="hourglass" /></span>`}
           ${armed != null ? html`<${Button} variant="primary" size="lg" icon="check" class="spov__confirm" data-testid="sp-confirm"
               title=${armedName ? t('确认选择「{armedName}」（再次点击卡牌亦可）', { armedName }) : t('确认选择')} onClick=${onConfirm}>${t('确认选择')}<//>` : null}
-          ${timed ? html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="sm" />` : null}
+          ${timed ? html`${frozenAt != null ? html`<${Countdown} seconds=${Math.max(0, Math.ceil((pub.deadline - frozenAt) / 1000))} total=${total ?? undefined} size="sm" />` : html`<${Countdown} deadline=${pub?.deadline} total=${total ?? undefined} size="sm" />`}` : null}
         </div>
       </header>
       ${order.length ? html`<div class="spov__order" aria-label=${t('决策顺序')}>
@@ -214,12 +214,12 @@ export function ChoiceView({ pub, sp, myId, solo, personal = false, busyIdx = nu
         ${sp.cards.map((card) => {
           const r = resolveSpCard(card, sp.family);
           const taker = card.takenBy ? players.get(card.takenBy) : null;
-          const can = cardPickable(sp, card, { myId, solo, busyIdx });
+          const can = cardPickable(sp, card, { myId, solo, busyIdx, readOnly });
           const busy = pickBusy(busyIdx, card, mine);
           const isArmed = can && armed === card.idx;
           const takerName = taker ? (card.takenBy === myId ? t('你') : taker.name) : null;
-          return html`<button key=${card.idx} type="button" class=${cx('spcard', `spcard--${r.kind}`, (card.takenBy || card.soldOut) && 'is-taken', card.takenBy === myId && 'is-mine', can && 'is-pickable', isArmed && 'is-armed', busy && 'is-busy')}
-              aria-busy=${busy ? 'true' : undefined} aria-pressed=${can ? String(isArmed) : undefined} disabled=${!can} onClick=${() => can && onTap(card.idx)}
+          return html`<button key=${card.idx} type="button" data-comm=${!readOnly && !card.takenBy && !card.soldOut ? 'choice' : undefined} data-player=${myId} data-idx=${card.idx} data-choice-id=${personal ? sp.id : undefined} class=${cx('spcard', `spcard--${r.kind}`, (card.takenBy || card.soldOut) && 'is-taken', card.takenBy === myId && 'is-mine', can && 'is-pickable', isArmed && 'is-armed', busy && 'is-busy')}
+              aria-busy=${busy ? 'true' : undefined} aria-pressed=${can ? String(isArmed) : undefined} aria-disabled=${!can ? 'true' : undefined} disabled=${readOnly || !!card.takenBy || !!card.soldOut} onClick=${() => can && onTap(card.idx)}
               aria-label=${isArmed ? t('{name}，已选中，再次点击确认', { name: r.name }) : takerName ? t('{name}，{takerName}已选择', { name: r.name, takerName }) : r.name} title=${`${r.name}\n${richTextPlain(r.desc)}`}>
             <span class="spcard__glow" aria-hidden="true"></span>
             <span class="spcard__head">

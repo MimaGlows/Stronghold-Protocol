@@ -125,18 +125,19 @@ Piece = { uid, kind: 'chess'|'item'|'token', id, golden: bool, tier, items: [ { 
 
 ---
 
-### Opening reroll messages and local seat recovery
 
-C→S adds host-only `room.rerollSetup {setupRevision}` / `room.cancelReroll {voteId}` and participant
-`g.rerollVote {voteId, agree}`. `m.public` carries `setupRevision` and nullable `rerollVote {id, proposerId, voters, agreed}`.
-Ready must reference the current revision; omission means revision 0 for old clients. The server blocks Ready while
-voting, refuses stale ids and cancels on disconnect/leave; DESIGN §28.21 / META.md describe the complete contract.
+## Windows 定制：服务器伪账号统计（2026-10-09）
 
-Explicit local recovery (§28.20) reuses saved hello tokens after a fresh live-tab claim check. Display names and room
-codes are UI metadata only, never authentication. No new network message or nickname/IP matching is introduced.
+Windows 定制使用服务器伪账号活动对局与现有接管/重连，官方本地恢复入口关闭；见 WINDOWS-UPGRADE-024.md。
 
 Optional `coins: [[id, balance, cap]]` is an integer skill-currency readout (§29.6), separate from ammo. It includes zero, is stepped between snapshots and clears when omitted. Result-validation names for board operators are resolved from the server's DIY/stand-in selections, never a supplied display name.
 
 Preparation state carries read-only `prepMapChars` for 外勤医疗. Boss-mate and scouting metadata include them in
 displayed field coordinates. Draft cards expose optional `soldOut` when equipment stock is unavailable; the client
 disables picking and the server checks again before consumption.
+
+“统计”的总览、策略、战斗累计和对局记录属于完整博士代号与四位编号，持久化于服务器档案 statistics（v=1、revision、records）。沿用官方计数口径与最近 1000 条上限。客户端不提交统计写入，不再提供导出、导入或清空。首页和选择页的独立游玩记录入口移除；记录详情、回放与分享使用同一统计历史入口。
+
+新增 C2S profile.stats.get {offset?}，服务端仅查询当前会话账号；S2C profile.stats 携带 profileKey、revision、aggregate、total、records、offset、next，每页最多 50 条且列表行限制 40 KiB。welcome 携带 statsRevision，不携带整个历史；profile.stats.changed 提示刷新。分页修订号变化时重新读取第一页，账号切换和异步响应均校验身份。
+
+服务端正常结算或永久离场后原子保存，以稳定局号去重。退出记录不会被队友后续结算覆盖；暂时断线不是退出，观战和 AI 不产生账号统计。每账号最近 30 条记录含退出，仅正常结算可保存回放；跨账号共享文件在所有参与账号均失去资格后清理。回放 HTTP 增加 owner 查询参数和账号范围能力密钥，旧接口及匿名分享继续兼容。72 小时限制取消，内容版本规则保留；已失效帧不恢复。

@@ -1,23 +1,7 @@
-// The local stats viewer (统计数据): this browser's record of the matches the player took part in — see ui/stats.js for
-// what is recorded, what counts and how the storage is bounded. A full-screen overlay opened imperatively from the
-// title screen / lobby / room (`openStats()`); <StatsHost/> is mounted once by main.js. Ported from PR #323 by
-// @2321Robin; reworked for 0.2.2 in the grammar of 干员调配 (top bar with tabs, a note line, a scrolling body).
-//
-//   总览      – games, wins, win rate, hidden-core reaches / clears, best round, time played; the difficulties; the six
-//               评语 (titles) with their counts; what counts and what was left out
-//   策略      – per strategy (band): games used / passed (self alive on a winning team) / pass rate
-//   战斗累计  – the player's summed combat bookkeeping of the settled matches
-//   对局记录  – every stored match, newest first. A settled row re-views that match's settlement screen (the record is
-//               inverted into an m.result payload for <ResultView/>); a match given up early is marked 中途退出 and,
-//               when it did not count, 不计入统计
-// Everything is 本机数据 (localStorage, `sp.pref.stats`) and the page says so, teammates' names included. 导出 / 导入 (a
-// JSON file, merged by record id on the way in) moves it between devices; 清空 resets it after a confirm dialog.
-// The host renders nothing until opened and the game data files the replay needs load only then (the lobby alone never
-// downloads them): the overview reads config / bands / assets only.
-
+// Server-backed pseudo-account statistics and the unified match history.
 import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS } from '../../../shared/constants.js';
-import { html, Icon, MicroLabel, Spinner, Button, confirmDialog } from '../ui/components.js';
+import { html, Icon, MicroLabel, Spinner, Button } from '../ui/components.js';
 import { useGameData, makeLookups, BandIcon, Img } from '../ui/gameComponents.js';
 import { data, useData } from '../data.js';
 import { fmtNum } from '../ui/gameLogic.js';
@@ -25,11 +9,10 @@ import { titleIconUrl } from '../ui/assetUrls.js';
 import { useDocClass } from '../ui/device.js';
 import { createStore, useStore, selectRoute } from '../store.js';
 import { ResultView } from './result.js';
-import { toast, toastError } from '../ui/toasts.js';
-import {
-  loadStats, saveStats, emptyStats, importStats, exportStats, aggregateStats, countsTowardStats, selfRowOf, roundsOf,
-  recordToResult, MAX_RECORDS, FULL_KEEP, IMPORT_MAX_CHARS,
-} from '../ui/stats.js';
+import { profileViewStore, loadProfileView } from '../ui/profileView.js';
+import { accountStatsStore, refreshStats } from '../ui/accountStats.js';
+import { openHistory } from '../replay/history.js';
+import { countsTowardStats, selfRowOf, roundsOf, recordToResult, MAX_RECORDS, FULL_KEEP } from '../../../shared/stats.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -37,14 +20,15 @@ const cx = (...p) => p.flat().filter(Boolean).join(' ');
 /** Rows of 对局记录 shown at first and added by each 显示更多. */
 export const HISTORY_PAGE = 50;
 
-const statsStore = createStore({ open: false, tab: 'overview' });
+const statsStore = createStore({ open: false, tab: 'overview', target: null });
 
 /** Open the stats viewer (title screen / lobby / room entry points). */
-export function openStats() {
+export function openStats(tab = 'overview', target = null) {
   data.load('config');
   data.load('bands');
   data.load('assets');
-  statsStore.set({ open: true, tab: 'overview' });
+  statsStore.set({ open: true, tab, target });
+  if(target) void loadProfileView(target); else void refreshStats();
 }
 export const closeStats = () => statsStore.set({ open: false });
 
@@ -68,37 +52,6 @@ function playedText(ms) {
   return mins < 100 ? t('{n} 分', { n: fmtNum(mins) }) : t('{n} 小时', { n: (mins / 60).toFixed(1) });
 }
 const difficultyName = (d) => (DIFFICULTY_NAMES[d] ? t(DIFFICULTY_NAMES[d]) : t('未知'));
-
-/** Save `text` as a download. Silent no-op when the browser refuses downloads. */
-function downloadText(filename, text) {
-  try {
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  } catch { /* ignore */ }
-}
-
-/** Read a picked file as text (`File.text()`, with a FileReader fallback for older Safari). */
-function readFileText(file) {
-  if (typeof file?.text === 'function') return file.text();
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result ?? ''));
-    fr.onerror = () => reject(fr.error || new Error('read failed'));
-    fr.readAsText(file);
-  });
-}
-
-/** `stronghold-stats-20261008-2130.json` */
-function exportFilename(now = new Date()) {
-  const p = (n) => String(n).padStart(2, '0');
-  return `stronghold-stats-${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}.json`;
-}
 
 /** One labelled number card. */
 function StatCard({ label, micro, value, tone }) {
@@ -205,10 +158,10 @@ function HistoryRow({ rec, gd, onOpen }) {
   const band = self?.bandId ? gd.band(self.bandId) : null;
   const rounds = roundsOf(rec);
   const known = Number.isFinite(self?.roundsPassed) || Number.isFinite(rec.roundsPassed);
-  const view = !quit && !rec.compact; // a quit has nothing settled; a compacted record no rows left
+  const view = !quit && !!rec.replay; // a quit has nothing settled; a compacted record no rows left
   const open = () => onOpen(rec);
   return html`<tr class=${cx(quit ? 'is-quit' : won ? 'is-win' : 'is-lose', !counted && 'is-excluded', view && 'is-clickable')}
-      title=${view ? t('点击查看该局结算') : !counted ? t('没有清完第一个回合就退出，不计入统计') : quit ? t('中途退出的对局没有结算可看') : t('较早的对局只保留汇总，不能回看结算')}
+      title=${view ? t('点击查看该局结算') : !counted ? t('没有清完第一个回合就退出，不计入统计') : quit ? t('中途退出的对局没有结算可看') : t('该局仅有统计记录，无法回看结算')}
       tabIndex=${view ? 0 : undefined}
       onClick=${view ? open : undefined} onKeyDown=${view ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } : undefined}>
     <td class="st-t">${dateTime(rec.t)}</td>
@@ -216,23 +169,23 @@ function HistoryRow({ rec, gd, onOpen }) {
     <td>${rec.roomMode === 'solo' ? t('单人') : rec.roomMode === 'coop' ? t('同盟') : '—'}</td>
     <td><span class="st-band">${band ? html`<${BandIcon} bandId=${band.bandId} size="xs" />${band.name}` : self?.bandId || '—'}</span></td>
     <td class="st-res">${quit ? html`<span class="t-quit">${t('中途退出')}</span>` : html`<span class=${won ? 't-win' : 't-lose'}>${won ? t('胜') : t('负')}</span>`}
-      ${!counted ? html`<em class="st-chip">${t('不计入统计')}</em>` : null}</td>
+      ${!counted ? html`<em class="st-chip">${t('不计入统计')}</em>` : null}
+      ${rec.replay?.expired ? html`<em class="st-chip">${t('回放已过期')}</em>` : null}</td>
     <td class="num">${known ? fmtNum(rounds) : '—'}</td>
     <td class="st-go" aria-hidden="true">${view ? html`<${Icon} name="chevronRight" />` : null}</td>
   </tr>`;
 }
 
 /** 对局记录: every stored match, newest first, HISTORY_PAGE rows at a time. */
-function History({ records, gd, onOpen }) {
-  const [shown, setShown] = useState(HISTORY_PAGE);
-  const rows = records.slice(0, shown);
-  return html`<${Section} title=${t('对局记录')} micro=${`HISTORY · ${records.length}`}>
+function History({ records, gd, onOpen, total, next, loading, onMore }) {
+  const rows = records;
+  return html`<${Section} title=${t('对局记录')} micro=${`HISTORY · ${total}`}>
     ${rows.length ? html`<div class="st-tablewrap"><table class="st-table st-table--history">
       <thead><tr><th>${t('时间')}</th><th>${t('难度')}</th><th>${t('模式')}</th><th>${t('策略')}</th><th>${t('结果')}</th><th class="num">${t('回合')}</th><th aria-hidden="true"></th></tr></thead>
       <tbody>${rows.map((r) => html`<${HistoryRow} key=${r.id} rec=${r} gd=${gd} onOpen=${onOpen} />`)}</tbody>
     </table></div>
-    ${records.length > shown ? html`<div class="st-more"><${Button} size="sm" variant="secondary" onClick=${() => setShown(shown + HISTORY_PAGE)}>${t('显示更多（还有 {n} 局）', { n: records.length - shown })}<//></div>` : null}
-    <p class="st-hint">${t('点击一行，回看该局结算；中途退出的对局只留记录。')} ${t('最多保留最近 {max} 局，只有最新的 {full} 局能回看结算。', { max: MAX_RECORDS, full: FULL_KEEP })}</p>`
+    ${next != null ? html`<div class="st-more"><${Button} size="sm" variant="secondary" disabled=${loading} onClick=${onMore}>${t('显示更多（还有 {n} 局）', { n: total - records.length })}<//></div>` : null}
+    <p class="st-hint">${t('点击一行，回看该局结算；中途退出的对局只留记录。')} ${t('服务器保留最近 {max} 条记录，仅最近 {full} 条记录中的完整对局可保存回放。', { max: MAX_RECORDS, full: FULL_KEEP })}</p>`
       : html`<p class="st-empty">${t('还没有记录 —— 完成一局对局后，这里会开始积累。')}</p>`}
   <//>`;
 }
@@ -246,16 +199,15 @@ function Replay({ rec, onBack }) {
 }
 
 /** The overlay, rendered while open (its data hooks run only then). */
-function StatsScreen({ tab }) {
+function StatsScreen({ tab, target }) {
   const ready = useData('config', 'bands', 'assets');
   const gd = useMemo(() => makeLookups(ready), [ready, data.locale()]);
-  const [stats, setStats] = useState(() => loadStats());
+  const stats = useStore((s) => s, Object.is, target ? profileViewStore : accountStatsStore);
   const [replay, setReplay] = useState(null);
   const boxRef = useRef(null);
-  const fileRef = useRef(null);
   const replayRef = useRef(null);
   replayRef.current = replay;
-  const inMatch = useStore((s) => selectRoute(s) === 'game');
+  const inMatch = useStore((s) => selectRoute(s) === 'game' && !s.match?.result);
   useDocClass('sp-stats-open');
 
   // a match starting (the host pressed 开始) takes the player to its briefing: the overlay must not sit on top of it
@@ -271,44 +223,7 @@ function StatsScreen({ tab }) {
     return () => { window.removeEventListener('keydown', onKey, true); clearTimeout(timer); };
   }, []);
 
-  const agg = useMemo(() => aggregateStats(stats.records), [stats]);
-  const reload = () => setStats(loadStats());
-
-  const doExport = () => {
-    try {
-      const payload = exportStats(stats);
-      downloadText(exportFilename(), JSON.stringify(payload));
-      toast(t('已导出 {n} 条对局记录', { n: payload.records.length }), 'success');
-    } catch (err) {
-      toastError(err);
-    }
-  };
-  const doFile = async (e) => {
-    const file = e.currentTarget.files?.[0];
-    e.currentTarget.value = ''; // allow re-picking the same file
-    if (!file) return;
-    if (file.size > IMPORT_MAX_CHARS) { toast(t('文件过大，无法导入'), 'error'); return; }
-    try {
-      const raw = JSON.parse(await readFileText(file));
-      const { stats: merged, added, skipped, dropped } = importStats(raw, loadStats());
-      if (added && !saveStats(merged)) { toast(t('无法写入本机存储，可能已满'), 'error'); return; }
-      reload();
-      const tail = (skipped ? t('（跳过重复 {skipped} 条）', { skipped }) : '') + (dropped ? t('（{n} 条无法读取）', { n: dropped }) : '');
-      toast(added ? t('已导入 {added} 条记录{tail}', { added, tail }) : t('没有新记录（全部与现有数据重复）'), 'success');
-    } catch (err) {
-      toast(err?.code === 'stats-newer-version' ? t('导入失败：这份文件由更新版本的客户端导出，请先升级客户端') : t('导入失败：不是有效的统计导出文件'), 'error');
-    }
-  };
-  const doClear = async () => {
-    const ok = await confirmDialog({
-      title: t('清空统计数据'), micro: 'CLEAR STATISTICS', danger: true, okText: t('清空'),
-      text: t('将删除本机保存的 {n} 条对局记录，无法恢复。', { n: stats.records.length }),
-    });
-    if (!ok) return;
-    if (!saveStats(emptyStats())) { try { globalThis.localStorage?.removeItem('sp.pref.stats'); } catch { /* ignore */ } }
-    reload();
-    toast(t('已清空本机统计数据'), 'success');
-  };
+  const agg = stats.aggregate;
 
   if (replay) return html`<div class="st st--replay" ref=${boxRef} tabindex="-1" role="dialog" aria-modal="true" aria-label=${t('统计数据')}>
     <${Replay} rec=${replay} onBack=${() => setReplay(null)} />
@@ -329,23 +244,15 @@ function StatsScreen({ tab }) {
             class=${cx('st-tab', x.id === tab && 'is-on')} onClick=${() => statsStore.set({ tab: x.id })}>${t(x.name)}</button>`)}
         </div>
       </div>
-      <div class="st-top__right">
-        <${Button} variant="ghost" size="sm" data-testid="stats-export" disabled=${empty || stats.newer} onClick=${doExport} title=${t('导出为文件（可在别的设备上导入）')}>${t('导出')}<//>
-        <${Button} variant="ghost" size="sm" data-testid="stats-import" disabled=${stats.newer} onClick=${() => fileRef.current?.click()} title=${t('从导出的文件导入（与现有记录合并）')}>${t('导入')}<//>
-        <input ref=${fileRef} type="file" accept="application/json,.json" hidden onChange=${doFile} />
-        <${Button} variant="secondary" size="sm" data-testid="stats-clear" disabled=${empty || stats.newer} onClick=${doClear} title=${t('清空本机的统计数据')}>${t('清空')}<//>
-      </div>
     </header>
-    <p class="st-note"><${Icon} name="info" />${t('本机数据：只保存在这个浏览器里，不会上传到服务器；同盟对局里队友的代号也会存在本机（导出文件里也有）。')}</p>
-    ${stats.damaged ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('本机保存的统计数据无法读取，已另存为备份，从现在起重新记录。')}</p>` : null}
-    ${stats.dropped ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('有 {n} 条记录已损坏，已忽略。', { n: stats.dropped })}</p>` : null}
+    <p class="st-note"><${Icon} name="info" />${target ? t('正在查看其他博士的服务器记录') : t('服务器数据：跟随当前伪账号保存，跨浏览器与重启后可恢复。')} <b>${stats.profileKey || t('尚未连接伪账号')}</b></p>
+    ${stats.error ? html`<p class="st-note is-warn" role="status">${stats.error}<${Button} size="sm" onClick=${() => target ? loadProfileView(target) : refreshStats()}>${t('重试')}<//></p>` : null}
     <main class="st-body" data-tab=${tab}>
-      ${!ready ? html`<div class="st-loading"><${Spinner} size="md" /></div>`
-        : stats.newer ? html`<p class="st-empty">${t('检测到更新版本的统计数据，请先升级客户端再查看，以免覆盖数据。')}</p>`
+      ${!ready || stats.loading && !stats.records.length ? html`<div class="st-loading"><${Spinner} size="md" /></div>`
           : empty ? html`<p class="st-empty">${t('还没有记录 —— 完成一局对局后，这里会开始积累。')}</p>`
             : tab === 'bands' ? html`<${Bands} agg=${agg} gd=${gd} />`
               : tab === 'totals' ? html`<${CombatSums} agg=${agg} />`
-                : tab === 'history' ? html`<${History} records=${stats.records} gd=${gd} onOpen=${setReplay} />`
+                : tab === 'history' ? html`<${History} records=${stats.records} total=${stats.total} next=${stats.next} loading=${stats.loading} onMore=${()=>target?loadProfileView(target,true):refreshStats(true)} gd=${gd} onOpen=${(rec) => rec.replay ? openHistory(rec.replay, 'result') : setReplay(rec)} />`
                   : html`<${Overview} agg=${agg} gd=${gd} />`}
     </main>
   </div>`;
@@ -353,8 +260,7 @@ function StatsScreen({ tab }) {
 
 /** Global stats viewer host — mounted once by main.js; renders nothing (and loads nothing) until opened. */
 export function StatsHost() {
-  const { open, tab } = useStore((s) => s, Object.is, statsStore);
+  const { open, tab, target } = useStore((s) => s, Object.is, statsStore);
   if (!open) return null;
-  return html`<${StatsScreen} tab=${tab} />`;
+  return html`<${StatsScreen} tab=${tab} target=${target} />`;
 }
-

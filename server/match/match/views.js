@@ -63,6 +63,7 @@ export class MatchViews {
   publicView() {
     const v = {
       t: 'm.public',
+      ...(this.recorder ? { replay: this.recorder.ticket() } : {}),
       phase: this.phase,
       round: this.round,
       lastRound: this.gd.lastRound,
@@ -94,7 +95,7 @@ export class MatchViews {
       players: this.order.map((ps) => ({
         playerId: ps.playerId,
         seat: ps.seat,
-        name: ps.name,
+        name: ps.name, ...(ps.doctorCode ? { doctorCode: ps.doctorCode } : {}),
         isBot: ps.isBot,
         connected: ps.isBot || (ps.connected && !ps.left),
         alive: ps.alive,

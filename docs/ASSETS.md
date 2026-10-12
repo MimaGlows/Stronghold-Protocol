@@ -513,3 +513,7 @@ operator's runtime ability graph. Mixed-letter banks are skipped. Preserve `mixO
 an older PR's full JSON, preserving JP voices and current operators. See DESIGN §28.17.
 
 The 40th local token model is the original champagne bomb (`token_10031_swire2_gdtrap`, §29.5), extracted from the official `btl_pfb_tokens_0.ab` through `TOKEN_SPINES`. Its web fallback is retained. Failed board-pack/image requests can retry after connectivity/visibility recovers; a failed three.js module gets at most two fresh-URL retries per page because browser module failures are cached. Successful resources remain cached.
+
+### 多语言配音清单
+
+素材工具默认同时生成 `audio.voices.cn` 与 `audio.voices.jp`；`audio.voice` 是中文兼容索引。重复索引共享同一批文件，不重复占用磁盘。`--voice-lang` 可附加 en／kr，不再替换中日库。客户端默认日文，按账号保存的干员单独设置优先于全局语言，缺失台词回退到另一语言。具体设置与迁移说明见 [VOICE-PROFILES.md](VOICE-PROFILES.md)。

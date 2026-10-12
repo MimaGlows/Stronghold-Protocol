@@ -19,7 +19,7 @@ const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapsho
 // direction-step hooks (ui/facingWheel.js): optional — the wheel falls back to the engine's dev hooks when absent;
 // setPen (enemy preview pen list), prepField ({ kind, side, mirror } of the Final Assault prep), stripesUnder (the view
 // stripes range previews under the units itself) — render/app.js; the DOM fallback lacks them (→ null)
-const OPTIONAL = ['pieceScreenRect', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder'];
+const OPTIONAL = ['unitScreen', 'pickCommunication', 'fieldTileScreen', 'setReplayTime', 'pieceScreenRect', 'setSettings', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder'];
 
 /**
  * Camera padding (px) that keeps the field clear of the DOM HUD (top bar + bond strip, team panel, shop bar /
@@ -270,6 +270,7 @@ export function useFieldView(hostRef) {
   const [state, setState] = useState({ view: null, kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retries = useRef(0);
+  const contextLost = useRef(false);
   const viewRef = useRef(null);
   useEffect(() => {
     let dead = false, retrying = false;
@@ -284,12 +285,24 @@ export function useFieldView(hostRef) {
       globalThis.__SP_VIEW__ = view; // dev / E2E introspection (view.raw.stats?.())
       setState({ view, kind: view.kind });
     }, (err) => { if (!dead && !controller.signal.aborted) console.error('[field] mount failed', err); });
+    const onContextLost = (event) => {
+      if(dead || viewRef.current?.kind !== 'engine')return;
+      event.preventDefault();
+      contextLost.current = true;
+      // Do not recreate a GPU context after a loss; use the existing DOM renderer.
+      const old=viewRef.current;viewRef.current=null;old?.destroy();
+      queueMicrotask(()=>{if(dead)return;
+        const fallback=guardView(createFallbackView(host,{data,assets:data.get('assets'),settings:settingsStore.get()}),'fallback');
+        viewRef.current=fallback;globalThis.__SP_VIEW__=fallback;setState({view:fallback,kind:'fallback'});
+      });
+    };
+    host.addEventListener('webglcontextlost',onContextLost,true);
     const unsub = settingsStore.subscribe((s) => viewRef.current?.setSettings?.(s));
     const onResize = () => viewRef.current?.resize();
     // A temporary network/vendor failure must not pin this mounted match to fallback forever. Retry on a useful
     // user event, at most twice in succession; the effect cleanup disposes the old view before creating its successor.
     const onRetry = () => {
-      if (dead || retrying || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
+      if (dead || retrying || contextLost.current || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
         || document.visibilityState !== 'visible' || globalThis.navigator?.onLine === false || retries.current >= 2) return;
       retrying = true; retries.current++; setAttempt((n) => n + 1);
     };
@@ -300,6 +313,7 @@ export function useFieldView(hostRef) {
       dead = true;
       controller.abort();
       unsub();
+      host.removeEventListener('webglcontextlost',onContextLost,true);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('online', onRetry);
       document.removeEventListener('visibilitychange', onRetry);

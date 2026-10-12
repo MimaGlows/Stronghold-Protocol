@@ -37,7 +37,7 @@ export class MatchClientCombat {
     const spec = buildBattleSpec({ ...opts, battleId, fieldId, kind, content: this.battleContent, boss });
     let total = 0;
     for (const x of spec.spawns) if (x && x.tag !== 'boss' && x.tag !== 'part' && x.countInTotal !== false) total += Math.max(1, Math.floor(Number(x.count) || 1));
-    return {
+    const field = {
       cc: true, fieldId, kind, players: players.slice(), battleId, spec, battle: null, live: true, done: false,
       mode: null, authority: null, startAt: this.sched.now(), result: null, resultSource: null, timeline: null, endGt: null,
       // progress: the field's own numbers as far as they are known before its first b.progress / result (`total` = the
@@ -53,6 +53,8 @@ export class MatchClientCombat {
       // which a result must not contradict before a perfect-payout bounty pays (_bossLeaksAgree)
       bossReported: null, lpReported: 0, credit: null, demoted: new Set(), heldResult: null, leaksBy: null,
     };
+    this.recorder?.safe(() => this.recorder.field(field));
+    return field;
   }
 
   /** A battle built from a spec on the server (headless / takeover / verification); never throws. */
@@ -217,6 +219,7 @@ export class MatchClientCombat {
     f.live = false;
     this._clearFieldTimers(f);
     if (!f.result) f.result = syntheticResult(f.players, { bossBy: f.bossBy });
+    this.recorder?.safe(() => this.recorder.fieldDone(f));
     f.progress.done = true;
     this.markPublic();
     this._maybeFieldsDone();

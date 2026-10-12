@@ -1,9 +1,13 @@
+import { isPingTarget, COMMUNICATION_PHASES, RADIO_LINES } from './communication.js';
+import { isSocialIdentity, isSocialSearch, isSocialPrivacy } from './social.js';
+import { isVoicePreferences } from './voice.js';
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
 import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
+import { isAvatarChoice } from './avatar.js';
 import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT } from './potential.js';
 
 // ---- tiny validators -------------------------------------------------------
@@ -378,8 +382,18 @@ const target = (v) => {
 /** @type {Record<string, Record<string, (v:any)=>boolean> & { $optional?: string[] }>} */
 export const C2S = {
   // session & lobby
-  hello: { name: (v) => isStr(v, NAME_MAX_LEN) && v.trim().length > 0, token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6),
-    noReplace: isBool, claimAt: (v) => isNum(v, 0, Number.MAX_SAFE_INTEGER), $optional: ['token', 'version', 'noReplace', 'claimAt'] },
+  'social.sync': {},
+  'social.search': { identity: isSocialSearch },
+  ...Object.fromEntries(['avatar', 'add', 'remove', 'join', 'spectate', 'invite'].map((action) => [`social.${action}`, { identity: isSocialIdentity }])),
+  'social.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9]{32}$/.test(v), accept: isBool },
+  hello: { name: (v) => isStr(v, NAME_MAX_LEN + 5) && v.trim().length > 0 && (v.length <= NAME_MAX_LEN || /^.{1,24}#\d{4}$/.test(v)), token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6), avatar: isAvatarChoice, $optional: ['token', 'version', 'avatar'] },
+  'profile.stats.get': { offset: (v) => isInt(v, 0, 1000), $optional: ['offset'] },
+  'profile.voice': { preferences: isVoicePreferences },
+  'profile.privacy': { preferences: isSocialPrivacy },
+  'profile.avatar': { avatar: isAvatarChoice },
+  'profile.transferResponse': { requestId: (v) => isStr(v, 32) && /^[a-f0-9]{32}$/.test(v), accept: isBool },
+  'profile.transferCancel': { requestId: (v) => isStr(v, 32) && /^[a-f0-9]{32}$/.test(v) },
+  'profile.records': { entries: (v) => isList(v, 200, (e) => isPlain(e) && isStr(e.id, 36) && /^[a-f0-9-]{36}$/.test(e.id) && isStr(e.key, 48) && /^[a-f0-9]{48}$/.test(e.key) && isStr(e.playerId, 40)) },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   'room.create': { mode: (v) => v === 'solo' || v === 'coop', difficulty: (v) => DIFFICULTIES.includes(v) },
   'room.join': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
@@ -436,6 +450,8 @@ export const C2S = {
   'g.choice': { idx: (v) => isInt(v, 0, 5), choiceId: isId, $optional: ['choiceId'] },
   'g.ready': { ready: isBool },
   'g.emote': { id: (v) => EMOTES.includes(v) },
+  'g.ping': { target: isPingTarget, round: (v) => isInt(v, 0, 99), phase: (v) => COMMUNICATION_PHASES.includes(v) },
+  'g.radio': { id: (v) => isInt(v, 0, RADIO_LINES.length - 1), round: (v) => isInt(v, 0, 99), phase: (v) => COMMUNICATION_PHASES.includes(v) },
   // playerId: the player tapped in the team panel (a 联防 / boss pair field shows two) — what an eliminated viewer or a
   // spectator seat follows from then on (Match.watchPref; community report of 2026-10-06, item 56)
   'g.watch': { fieldId: (v) => isStr(v, 32), playerId: isId, $optional: ['playerId'] },
@@ -469,9 +485,13 @@ export const C2S = {
 
 // Server → client message types (documentation + client dispatch table keys).
 export const S2C = [
+  'social.state', 'social.presence', 'social.search', 'social.avatar', 'social.invite', 'social.inviteEnded',
+  'profile.history', 'profile.preferences',
+  'profile.transferRequest', 'profile.transferPending', 'profile.transferEnded',
+  'profile.stats', 'profile.stats.changed',
   'welcome', 'ok', 'error', 'pong',
   'room.state', 'room.closed',
-  'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.result',
+  'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.communication', 'm.result',
   // m.unitStats { seq, round, units: [unitStatsEntry] } — the answer to g.unitStats (the requester only)
   'm.unitStats',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,

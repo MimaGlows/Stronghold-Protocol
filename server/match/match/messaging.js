@@ -18,6 +18,7 @@ export class MatchMessaging {
   }
 
   broadcast(msg) {
+    this.recorder?.safe(() => this.recorder.message(msg));
     if (this.disposed) return;
     try { this.broadcastFn(msg); } catch (e) { this.reportError('broadcast', e); }
   }
@@ -66,6 +67,7 @@ export class MatchMessaging {
 
   /** Send pending m.private (per player, only when changed) and m.public (throttled ≤ 10/s). */
   flush(forcePublic = false) {
+    this.recorder?.safe(() => this.recorder.checkpoint());
     if (this.disposed) return;
     if (this._privDirty.size) {
       const list = [...this._privDirty];

@@ -298,7 +298,7 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     const { page, problems } = await open('phase=PREP', { render: 'fallback' });
     const initial = await mockState(page);
     await page.keyboard.press('KeyQ');
-    await page.keyboard.press('KeyX');
+    await page.keyboard.press('KeyC');
     assert.deepEqual(await mockState(page), initial, 'no selection means no action');
     const unit = initial.board.find((piece) => piece.kind === 'chess' && !piece.golden);
     await page.click(`.ff-piece[data-uid="${unit.uid}"]`);
@@ -310,7 +310,7 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
       input.focus();
     });
     await page.keyboard.press('KeyQ');
-    await page.keyboard.press('KeyX');
+    await page.keyboard.press('KeyC');
     assert.deepEqual(await mockState(page), initial, 'typing must not retreat or sell');
     await page.evaluate(() => document.getElementById('shortcut-test-input').remove());
     await page.keyboard.press('KeyQ');
@@ -323,13 +323,13 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     assert.equal(await page.$('.uframe__btn--retreat'), null, 'bench operator cannot retreat');
     await page.keyboard.press('KeyQ');
     assert.deepEqual(await mockState(page), retreated, 'Q on the bench does nothing');
-    await page.keyboard.press('KeyX');
+    await page.keyboard.press('KeyC');
     await page.waitForFunction((uid) => !globalThis.__MOCK__.S().priv.hand.some((piece) => piece?.uid === uid), {}, unit.uid);
     assert.ok((await mockState(page)).funds > retreated.funds, 'X sells the selected operator');
     const item = (await mockState(page)).hand.find((piece) => piece?.kind === 'item');
     await page.click(`.ff-piece[data-uid="${item.uid}"]`);
     await page.waitForSelector('.uframe__btn--destroy');
-    await page.keyboard.press('KeyX');
+    await page.keyboard.press('KeyC');
     assert.ok((await mockState(page)).hand.some((piece) => piece?.uid === item.uid), 'X must not destroy an item');
     assert.equal(await page.$('.modal'), null, 'no destroy confirmation');
     assert.deepEqual(problems, []);

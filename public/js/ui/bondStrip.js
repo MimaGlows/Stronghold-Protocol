@@ -50,7 +50,7 @@ function OwnerTag({ owner }) {
  * @param {{ bonds: any[], layersDisabled?: boolean, onOpen:(bondId:string)=>void, openId?: string|null, max?: number,
  *   owner?: string|null }} props — owner: the watched teammate's name (null = your own bonds)
  */
-export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null, max = 14, owner = null }) {
+export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null, max = 14, owner = null, ownerId = null }) {
   const sorted = sortBonds(bonds, (id) => data.lookup('bonds', id));
   if (!sorted.length) {
     return html`<div class=${cx('bstrip', 'bstrip--empty', owner && 'is-other')} data-owner=${owner || null}>
@@ -67,7 +67,7 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
       if (b.off) {
         // a bond the mode never activates, with members: the briefing's grey ✕ disc, no stack count, 本局禁用 under it
         const name = rec?.name || b.bondId;
-        return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-off="1"
+        return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-comm="bond" data-player=${ownerId} data-off="1"
             class=${cx('bslot', 'is-off', openId === b.bondId && 'is-open')}>
           <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
             disabled=${true} size="sm" showName=${true} layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
@@ -76,7 +76,7 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
         </div>`;
       }
       const next = nextThreshold(b.count ?? 0, th);
-      return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-harmony=${b.harmony > 0 ? b.harmony : null}
+      return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-comm="bond" data-player=${ownerId} data-harmony=${b.harmony > 0 ? b.harmony : null}
           class=${cx('bslot', b.active && 'is-active', openId === b.bondId && 'is-open')}>
         <${BondDisc} name=${rec?.name || b.bondId} icon=${bondIconUrl(m, b.bondId)} layers=${rec?.noStack ? undefined : b.layers ?? 0}
           tier=${b.tier ?? 0} maxTier=${Math.max(1, th.length)} active=${!!b.active} size="sm" showName=${true}

@@ -37,6 +37,7 @@
 //   onDisconnect(session)                  the session's socket closed (session kept for the reconnect window)
 //   onExpire(session)                      the session was purged (disconnected longer than the window)
 
+import { doctorIdentity } from '../shared/doctor.js';
 import { randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 import { C2S, validateC2S } from '../shared/protocol.js';
@@ -50,6 +51,8 @@ export const NET_DEFAULTS = Object.freeze({
   heartbeatMs: 30_000,          // ping interval; a socket that missed one full interval is terminated
   helloTimeoutMs: 30_000,       // sockets that never say hello are closed (4002)
   reconnectWindowMs: 10 * 60_000, // disconnected sessions stay resumable this long
+  profileTransferWaitMs: 30_000,
+  profileTransferCooldownMs: 30_000,
   snapDropBytes: 1 << 20,       // skip b.snap while bufferedAmount exceeds this
   hardBufferBytes: 16 << 20,    // terminate a socket whose send queue exceeds this
   maxConnections: 2000,         // concurrent sockets (enforced by index.js at upgrade time)
@@ -67,7 +70,7 @@ export const NET_DEFAULTS = Object.freeze({
  * (a ≤ 160-id list, the same way), room.diy (≤ 8 自选 picks checked against the data, the same way) and room.spectate
  * (taking a spectator seat in a running match resends its state like a watcher's g.watch — server/lobby.js spectate).
  */
-export const HEAVY_TYPES = new Set(['g.watch', 'room.loadout', 'room.ownership', 'room.diy', 'room.spectate']);
+export const HEAVY_TYPES = new Set(['social.search', 'social.sync', 'social.invite', 'profile.privacy', 'profile.stats.get', 'profile.voice', 'profile.records', 'g.watch', 'room.loadout', 'room.ownership', 'room.diy', 'room.spectate']);
 
 /** Close codes (see header). */
 export const CLOSE = Object.freeze({ REPLACED: 4001, HELLO_TIMEOUT: 4002, POLICY: 1008, SHUTDOWN: 1001 });
@@ -92,12 +95,15 @@ export class Session {
     this.token = token;
     /** @type {string} sanitized nickname */
     this.name = name;
+    /** @type {import('../shared/avatar.js').AvatarChoice} */
+    this.avatar = { kind: 'default' };
+    this.avatarUpdatedAt = -Infinity;
+    this.doctorCode = null;
+    this.profile = null;
     /** @type {import('ws').WebSocket | null} currently bound socket */
     this.ws = null;
     /** @type {boolean} */
     this.connected = false;
-    /** @type {number | null} local first-welcome stamp of the attached client (optional, not authentication) */
-    this.claimAt = null;
     /** @type {number} ms epoch of the last inbound frame / pong */
     this.lastSeen = now;
     /** @type {number | null} ms epoch when the socket was lost (null while connected) */
@@ -525,6 +531,10 @@ export class Network {
     this.conns = new Map();
     /** @type {Map<string, number>} open sockets per client network key */
     this.connsPerKey = new Map();
+    /** @type {Map<string, any>} pending transfers, bound to the original and requesting connections. */
+    this.profileTransfers = new Map();
+    /** @type {Map<string, number>} per-seat cooldown prevents repeated popup requests. */
+    this.profileTransferAt = new Map();
     this.closed = false;
     this.heartbeatTimer = setInterval(() => this.heartbeat(), this.opts.heartbeatMs);
     this.heartbeatTimer.unref?.();
@@ -611,6 +621,7 @@ export class Network {
       return;
     }
     if (msg.t === 'hello') { this.onHelloMsg(conn, msg, now); return; }
+    if (msg.t === 'profile.transferResponse' || msg.t === 'profile.transferCancel') { this.onProfileTransfer(conn, msg); return; }
     if (!conn.session) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'hello required')); return; }
     if (HEAVY_TYPES.has(msg.t) && !conn.heavy.take(now)) { this.reply(conn, errorMsg(ERR.RATE, rid, `${msg.t} too often`)); return; }
 
@@ -624,6 +635,7 @@ export class Network {
       this.log.error(`[net] handler crashed on ${msg.t}`, e);
       res = { error: ERR.INTERNAL };
     }
+    if (msg.t.startsWith('room.') || msg.t.startsWith('social.') || msg.t === 'profile.avatar') this.handler.social?.changed();
     if (res && res.error) {
       // fire-and-forget battle progress (no rid) that reached no running match — the match just ended, the room went
       // back to the lobby — is stale, not a client mistake: never answered (DESIGN §14; a rid-less error frame would
@@ -634,46 +646,67 @@ export class Network {
   }
 
   /** @param {Connection} conn @param {any} msg @param {number} now */
-  onHelloMsg(conn, msg, now) {
+  onHelloMsg(conn, msg, now, approvedSession = null) {
+    for (const transfer of this.profileTransfers.values()) if (transfer.requester === conn) this.endProfileTransfer(transfer, ERR.PROFILE_CANCELED);
     const rid = msg.rid;
     if (msg.version != null && msg.version !== PROTOCOL_VERSION) {
       this.reply(conn, errorMsg(ERR.BAD_MSG, rid, `version mismatch: server ${PROTOCOL_VERSION}`));
       return;
     }
-    const name = sanitizeName(msg.name);
+    const parsed = this.handler.profiles ? doctorIdentity(msg.name) : null;
+    if (this.handler.profiles && !parsed) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'callsign#0001 expected')); return; }
+    const name = sanitizeName(parsed?.name || msg.name);
     if (!name) { this.reply(conn, errorMsg(ERR.BAD_MSG, rid, 'bad field name')); return; }
+    const avatarCheck = msg.avatar === undefined ? null : this.handler.checkAvatar?.(msg.avatar);
+    if (avatarCheck?.error) { this.reply(conn, errorMsg(avatarCheck.error, rid, avatarCheck.detail)); return; }
 
-    let session = conn.session;
-    let resumed = false;
-    const repeat = !!session;
-    if (!session) {
-      session = msg.token ? this.registry.byToken(msg.token) : null;
-      if (session) {
-        if (session.connected && session.ws && session.ws !== conn.ws
-          && (msg.noReplace || (Number.isFinite(msg.claimAt) && session.claimAt != null && msg.claimAt > session.claimAt))) {
-          this.reply(conn, errorMsg(ERR.SESSION_IN_USE, rid));
-          return;
+    let session = conn.session || (msg.token ? this.registry.byToken(msg.token) : null);
+    const repeat = !!conn.session;
+    let resumed = !repeat && !!session;
+    let resolved = null;
+    if (this.handler.profiles) {
+      try {
+        const code = parsed.code || ((!repeat || session?.roomCode) && session?.name === name ? session.profile?.code : null);
+        if (session?.roomCode && session.profile && (session.name !== name || code && code !== session.profile.code)) {
+          this.reply(conn, errorMsg(ERR.ROOM_STARTED, rid, 'leave room before switching profile')); return;
         }
-        resumed = true;
-        if (session.ws && session.ws !== conn.ws) this.detachReplaced(session.ws);
-      } else {
-        session = this.registry.create(name);
-        if (!session) { this.reply(conn, errorMsg(ERR.INTERNAL, rid, 'server full')); return; }
-      }
-      conn.session = session;
-      session.ws = conn.ws;
-      session.connected = true;
-      session.claimAt = Number.isFinite(msg.claimAt) ? msg.claimAt : null;
-      session.disconnectedAt = null;
+        // A newly chosen identity starts clean. hello's browser cache is never a source for another account.
+        resolved = this.handler.profiles.resolve(name, code);
+        {
+          const active = this.handler.profileMatchSession?.(name, resolved.profile.code);
+          if (active?.connected && active.ws !== conn.ws && active.ws?.readyState === WS_OPEN && approvedSession !== active) {
+            this.requestProfileTransfer(conn, msg, active, now); return;
+          }
+          if (active && active !== session) {
+            // This connection may already have a roomless identity. Retire it before rebinding to the seat.
+            if (session && conn.session === session) {
+              session.ws = null; session.connected = false; session.disconnectedAt = now;
+              this.registry.remove(session);
+            }
+            session = active; resumed = true;
+          }
+        }
+      } catch (e) { this.log.error('[profile] restore failed', e); this.reply(conn, errorMsg(ERR.INTERNAL, rid, 'profile save failed')); return; }
+    }
+    if (!session) {
+      session = this.registry.create(name);
+      if (!session) { this.reply(conn, errorMsg(ERR.INTERNAL, rid, 'server full')); return; }
+    }
+    if (session.ws && session.ws !== conn.ws) this.detachReplaced(session.ws);
+    conn.session = session; session.ws = conn.ws; session.connected = true; session.disconnectedAt = null;
+    if (resolved) {
+      session.profile = resolved.profile; session.doctorCode = resolved.profile.code; session.avatar = resolved.profile.avatar;
+      this.handler.restorePreferences?.(session);
     }
     session.name = name;
+    if (!this.handler.profiles && avatarCheck?.ok) session.avatar = avatarCheck.avatar;
     session.lastSeen = now;
     session.addr = conn.ip;
     session.limitKey = conn.key;
 
     let extra = null;
     try { extra = this.handler.welcomeInfo?.() ?? null; } catch (e) { this.log.error('[net] welcomeInfo crashed', e); }
-    const welcome = { ...(extra && typeof extra === 'object' ? extra : null), t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, serverNow: now, version: PROTOCOL_VERSION, resumed };
+    const welcome = { ...(extra && typeof extra === 'object' ? extra : null), t: 'welcome', playerId: session.playerId, token: session.token, name: session.name, avatar: session.avatar, ...(session.profile ? { doctorCode: session.doctorCode, profileRestored: resolved.restored, history: [], statsRevision: session.profile.statistics?.revision || 0, profilePreferences: session.preferences, profilePreferencesInitialized: !!session.profile.preferences } : {}), serverNow: now, version: PROTOCOL_VERSION, resumed };
     if (validRid(rid)) welcome.rid = rid;
     this.reply(conn, welcome);
     try {
@@ -681,6 +714,39 @@ export class Network {
     } catch (e) {
       this.log.error('[net] onHello crashed', e);
     }
+  }
+
+  requestProfileTransfer(conn, hello, session, now) {
+    if ([...this.profileTransfers.values()].some((p) => p.session === session) || now - (this.profileTransferAt.get(session.playerId) ?? -Infinity) < this.opts.profileTransferCooldownMs) {
+      this.reply(conn, errorMsg(ERR.PROFILE_BUSY, hello.rid)); return;
+    }
+    const original = this.conns.get(session.ws);
+    if (!original || original.closing) { this.reply(conn, errorMsg(ERR.PROFILE_CANCELED, hello.rid)); return; }
+    const requestId = newToken(), expiresAt = now + this.opts.profileTransferWaitMs;
+    const transfer = { requestId, requester: conn, original, session, hello, expiresAt, timer: null };
+    transfer.timer = setTimeout(() => this.endProfileTransfer(transfer, ERR.PROFILE_TIMEOUT), this.opts.profileTransferWaitMs);
+    transfer.timer.unref?.();
+    this.profileTransfers.set(requestId, transfer); this.profileTransferAt.set(session.playerId, now);
+    this.reply(original, { t: 'profile.transferRequest', requestId, expiresAt, serverNow: now, name: session.name, doctorCode: session.doctorCode });
+    this.reply(conn, { t: 'profile.transferPending', requestId, expiresAt, serverNow: now, rid: hello.rid });
+  }
+
+  endProfileTransfer(transfer, error = null) {
+    if (this.profileTransfers.get(transfer.requestId) !== transfer) return;
+    clearTimeout(transfer.timer); this.profileTransfers.delete(transfer.requestId);
+    this.reply(transfer.original, { t: 'profile.transferEnded', requestId: transfer.requestId });
+    if (error) this.reply(transfer.requester, errorMsg(error, transfer.hello.rid));
+  }
+
+  onProfileTransfer(conn, msg) {
+    const transfer = this.profileTransfers.get(msg.requestId);
+    const valid = transfer && (msg.t === 'profile.transferCancel' ? transfer.requester === conn : transfer.original === conn && conn.session === transfer.session && transfer.session.ws === conn.ws);
+    if (!valid) { this.reply(conn, errorMsg(ERR.BAD_TARGET, msg.rid)); return; }
+    if (this.now() >= transfer.expiresAt) { this.endProfileTransfer(transfer, ERR.PROFILE_TIMEOUT); this.reply(conn, errorMsg(ERR.BAD_TARGET, msg.rid)); return; }
+    if (validRid(msg.rid)) this.reply(conn, { t: 'ok', rid: msg.rid });
+    if (msg.t === 'profile.transferCancel' || !msg.accept) { this.endProfileTransfer(transfer, msg.t === 'profile.transferCancel' ? ERR.PROFILE_CANCELED : ERR.PROFILE_DENIED); return; }
+    this.endProfileTransfer(transfer);
+    if (!transfer.requester.closing && this.conns.get(transfer.requester.ws) === transfer.requester) this.onHelloMsg(transfer.requester, transfer.hello, this.now(), transfer.session);
   }
 
   /** The session moved to a new socket: unbind and close the old one without firing a disconnect. */
@@ -696,6 +762,7 @@ export class Network {
 
   /** @param {Connection} conn */
   onClose(conn) {
+    for (const transfer of this.profileTransfers.values()) if (transfer.requester === conn || transfer.original === conn) this.endProfileTransfer(transfer, ERR.PROFILE_CANCELED);
     if (this.conns.delete(conn.ws) && conn.key) {
       const n = (this.connsPerKey.get(conn.key) || 1) - 1;
       if (n > 0) this.connsPerKey.set(conn.key, n);
@@ -722,7 +789,7 @@ export class Network {
           conn.alive = false;
           continue;
         }
-        if (!conn.session && now - conn.openedAt > this.opts.helloTimeoutMs) {
+        if (!conn.session && ![...this.profileTransfers.values()].some((p) => p.requester === conn) && now - conn.openedAt > this.opts.helloTimeoutMs) {
           conn.close(CLOSE.HELLO_TIMEOUT, 'hello timeout');
           continue;
         }
@@ -740,6 +807,7 @@ export class Network {
     let expired;
     try { expired = this.registry.sweep(this.now()); } catch (e) { this.log.error('[net] sweep crashed', e); return; }
     for (const s of expired) {
+      this.profileTransferAt.delete(s.playerId);
       try { this.handler.onExpire?.(s); } catch (e) { this.log.error('[net] onExpire crashed', e); }
     }
   }
@@ -749,10 +817,13 @@ export class Network {
    * @param {number} [code] @param {string} [reason]
    */
   close(code = CLOSE.SHUTDOWN, reason = 'server shutdown') {
+    this.handler.social?.close();
     if (this.closed) return;
     this.closed = true;
     clearInterval(this.heartbeatTimer);
     clearInterval(this.sweepTimer);
+    for (const transfer of this.profileTransfers.values()) this.endProfileTransfer(transfer, ERR.PROFILE_CANCELED);
+    this.profileTransferAt.clear();
     for (const conn of this.conns.values()) {
       conn.close(code, reason);
       const t = setTimeout(() => { try { conn.ws.terminate(); } catch { /* ignore */ } }, 1000);

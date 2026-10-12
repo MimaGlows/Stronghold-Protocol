@@ -1067,6 +1067,8 @@
 .me-chip--btn:active { transform: translateY(1px); }
 .me-chip__stats { flex: none; width: .2rem; height: .2rem; margin-left: .04rem; color: var(--mint-500); opacity: .7; }
 .me-chip--btn:hover .me-chip__stats { opacity: 1; }
+.lobby-screen button.me-chip__text { font: inherit; color: inherit; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.lobby-screen button.me-chip__text:hover { color: var(--mint-400); }
 
 .crash { align-items: center; justify-content: center; }
 .crash__box {

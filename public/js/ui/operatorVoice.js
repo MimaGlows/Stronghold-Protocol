@@ -1,4 +1,4 @@
-// Local listening preference, shared by roster and DIY details; deliberately absent from room.loadout.
+// Official roster/DIY selector; listening preferences sync through the pseudoaccount.
 import { html } from './components.js';
 import { useSettings, updateSettings } from './settings.js';
 import { t } from '../../../shared/i18n.js';
@@ -20,6 +20,6 @@ export function OperatorVoice({ charId }) {
     <span class="lo-select"><select aria-label=${t('此干员语音')} value=${value} onChange=${(e) => change(e.currentTarget.value)}>
       <option value="">${t('跟随全局')}</option><option value="cn">${VOICE_LANG_NAMES.cn}</option><option value="jp">${VOICE_LANG_NAMES.jp}</option>
     </select></span>
-    <small>${t('仅保存在此浏览器，缺失的日语语音会回退到中文。')}</small>
+    <small>${t('语音设置随当前伪账号保存；缺失的语音会回退到另一种语言。')}</small>
   </label>`;
 }

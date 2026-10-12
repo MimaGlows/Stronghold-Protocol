@@ -1564,7 +1564,8 @@ export async function createFieldView(host, options = {}) {
       }
       if (!v) v = battleView(id) || createUnknown(id, s);
       if (!v) continue;
-      if (!v._seen) { v._seen = true; v.fadeIn = 0; }
+      if (!v._seen) { v._seen = true; v.fadeIn = replayTime != null ? 1 : 0; }
+      if (replayTime != null && !replayPlaying) v.fadeIn = 1;
       syncView(v, s, renderT);
     }
     // knocked-out operators waiting to redeploy (b.snap `down`, user playtest #4 item 9): their view stays on the
@@ -1613,6 +1614,7 @@ export async function createFieldView(host, options = {}) {
   // ---- frame --------------------------------------------------------------------------------------------------
 
   let clock = 0;
+  let replayTime = null, replayPlaying = false, replayRate = 1;
   let cpuMs = 0;
   let frameNo = 0;
   let impInterval = 0;
@@ -1670,7 +1672,7 @@ export async function createFieldView(host, options = {}) {
     }
     const dtRaw = (now - lastNow) / 1000;
     lastNow = now;
-    const dt = Math.min(0.1, Math.max(0, dtRaw));
+    const dt = replayTime != null ? (replayPlaying ? Math.min(0.1, Math.max(0, dtRaw)) * replayRate : 0) : Math.min(0.1, Math.max(0, dtRaw));
     if (dtRaw < 0.25) frameMs = frameMs * 0.9 + dtRaw * 1000 * 0.1;
     fps = 1000 / Math.max(1, frameMs);
     adaptLoad(dtRaw);
@@ -1686,7 +1688,7 @@ export async function createFieldView(host, options = {}) {
       tiles.project(cam);
       updateBackdrop(clock);
       if (mode === 'battle') {
-        const renderT = interp.update(now / 1000);
+        const renderT = replayTime != null ? (interp.renderT = replayTime) : interp.update(now / 1000);
         if (Number.isFinite(renderT)) {
           processEvents(renderT);
           syncBattle(renderT);
@@ -1790,6 +1792,7 @@ export async function createFieldView(host, options = {}) {
     setPrep,
     /** Enemy preview pen: a list in m.private.nextEnemies shape, or null to empty it (setPrep does this itself). */
     setPen(list) { if (destroyed) return false; setPenList(Array.isArray(list) ? list : null); return true; },
+    setReplayTime(gt, playing = false, rate = 1) { replayTime = Number.isFinite(gt) ? gt : null; replayPlaying = !!playing; replayRate = rate; },
     enterBattle,
     pushSnapshot,
     pushEvents,
@@ -1822,6 +1825,34 @@ export async function createFieldView(host, options = {}) {
       return () => listeners.get(name)?.delete(fn);
     },
     off(name, fn) { listeners.get(name)?.delete(fn); },
+    // Pure read API: communications intercept pointers before the normal drag/click controller.
+    pickCommunication(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect(), x = clientX - rect.left, y = clientY - rect.top;
+      if (destroyed || x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+      const piece = pieceAt(x, y);
+      if (piece) return { ...piece, type: 'piece', space: 'board' };
+      const enemy = penUnitAt(x, y) || (mode === 'prep' ? leaderAt(x, y) : null);
+      if (enemy) return { type: 'enemy', enemyKey: enemy.info?.defId || enemy.enemyKey };
+      const unit = battleUnitAt(x, y);
+      if (unit) return { type: 'unit', unit: infos.get(unit.id) || unit.info, space: 'field' };
+      const fieldSpace = mode !== 'prep' || prepXf !== IDENTITY;
+      const tile = fieldSpace ? groundTile(x, y) : pickBoardTile(x, y);
+      return tile ? { ...tile, type: 'tile', space: fieldSpace ? 'field' : 'board' } : null;
+    },
+    unitScreen(ownerId, uid) {
+      for (const v of views.values()) {
+        const info=infos.get(v.id) || v.info;
+        if(info?.ownerId !== ownerId || info.uid !== uid || info.kind !== 'op' || !v.alive || v.down || !v._seen)continue;
+        const p=cam.project(v.x,v.y,v.z||0),r=canvas.getBoundingClientRect();
+        return p ? {x:r.left+p.x,y:r.top+p.y} : null;
+      }
+      return null;
+    },
+    fieldTileScreen(row, col) {
+      if (destroyed) return null;
+      const p = cam.project(col, row, heightAt(row, col)), rect = canvas.getBoundingClientRect();
+      return p ? { x: rect.left + p.x, y: rect.top + p.y } : null;
+    },
     pieceScreenRect(uid) {
       let v = views.get('p:' + uid);
       if (!v) for (const x of views.values()) if (x.uid === uid || x.info?.uid === uid || x.id === uid) { v = x; break; }

@@ -15,8 +15,8 @@
 //                 stats: { dmgDealt, kills, leaks, gold /* funds SPENT */, refreshes, merges, bossDamage?, itemsEquipped?,
 //                          activatedLayers?, lpLost?, perfectRounds? } }] }
 
-import { useEffect } from '../../vendor/hooks.module.js';
-import { html, Button, Icon, MicroLabel, DifficultyTag } from '../ui/components.js';
+import { useEffect, useState } from '../../vendor/hooks.module.js';
+import { html, Button, Icon, MicroLabel, DifficultyTag, Tooltip, useTicker, Modal } from '../ui/components.js';
 import { useGameData, Img, UnitThumb, BandIcon, PlayerAvatar, BondGlyph, LpTower, Sprite } from '../ui/gameComponents.js';
 import { normalizeResult, fmtNum, diyRecordFor, cardStandIn, standInForText } from '../ui/gameLogic.js';
 import { data } from '../data.js';
@@ -25,6 +25,12 @@ import { store, useStore, emptyMatch } from '../store.js';
 import { audio } from '../audio.js';
 import { sentText } from '../ui/lang.js';
 import { t, tParts, N_ } from '../../../shared/i18n.js';
+
+import { openHistory, shareReplayUrl } from '../replay/history.js';
+import { copyText } from '../ui/clipboard.js';
+import { toast } from '../ui/toasts.js';
+import { expiryHint } from '../replay/timeline.js';
+import { RestrictionsDialog } from '../replay/restrictions.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -103,14 +109,17 @@ function PlayerCard({ p, myId, titles, best, solo = false }) {
   </article>`;
 }
 
-/** RESULT screen of the match on screen: reads the store; 返回同盟 / 返回大厅 drops the match. */
-export function ResultScreen() {
-  const res = useStore((s) => s.match.result);
-  const pub = useStore((s) => s.match.public);
-  const myId = useStore((s) => s.me.playerId);
+/** Live result or server-backed historical settlement. */
+export function ResultScreen({ archived = null, archivedPlayerId = null, onBack = null, onReplay = null, shared = false } = {}) {
+  const liveRes = useStore((s) => s.match.result);
+  const livePub = useStore((s) => s.match.public);
+  const liveId = useStore((s) => s.me.playerId);
   const hasRoom = useStore((s) => !!s.room);
-  const back = () => store.set({ match: emptyMatch() });
-  return html`<${ResultView} res=${res} pub=${pub} myId=${myId} backLabel=${hasRoom ? t('返回同盟') : t('返回大厅')} onBack=${back} />`;
+  const back = onBack || (() => store.set({ match: emptyMatch() }));
+  return html`<${ResultView} res=${archived ? archived.result : liveRes}
+    pub=${archived ? archived.nodes?.at(-1)?.public : livePub} myId=${archivedPlayerId || liveId}
+    backLabel=${shared ? t('关闭分享') : archived ? t('返回记录') : hasRoom ? t('返回同盟') : t('返回大厅')}
+    onBack=${back} quiet=${!!archived} archived=${archived} onReplay=${onReplay} archiveActions=${true} />`;
 }
 
 /**
@@ -118,7 +127,15 @@ export function ResultScreen() {
  * (screens/stats.js, which hands it the payload recordToResult rebuilt; `quiet`: no settlement jingle).
  * @param {{ res: any, pub?: any, myId?: string|null, backLabel: string, onBack: () => void, quiet?: boolean }} props
  */
-export function ResultView({ res, pub = null, myId = null, backLabel, onBack, quiet = false }) {
+export function ResultView({ res, pub = null, myId = null, backLabel, onBack, quiet = false, archived = null, onReplay = null, archiveActions = false }) {
+  const [info, setInfo] = useState(false);
+  const [share, setShare] = useState(false);
+  useTicker(archived ? 1000 : 0);
+  const replayNow = archived?.serverNow != null ? archived.serverNow + Date.now() - archived.receivedAt : Date.now();
+  const replayExpired = archived?.status === 'expired' || archived?.expiresAt > 0 && replayNow >= archived.expiresAt;
+  const shareUrl = shareReplayUrl(archived?.shareCode);
+  const copyShare = async () => toast(await copyText(shareUrl) ? t('分享链接已复制') : t('复制失败，请手动复制链接'), 'info');
+  const restrictions = archived?.restrictions || res?.restrictions || pub;
   const gd = useGameData();
   const r = normalizeResult(res, pub);
   const titles = Array.isArray(gd.config?.titles) ? gd.config.titles : [];
@@ -162,7 +179,12 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
         </div>
         <footer class="result__foot">
           <${Button} variant="primary" size="xl" icon="chevronLeft" onClick=${onBack}>${backLabel}<//>
+          ${archiveActions ? html`<div class="result__archive-actions">${archived ? html`<${Button} onClick=${() => setInfo(true)}>${t('同盟限制')}<//>
+            <${Tooltip} text=${expiryHint(archived, replayNow)} placement="top"><span class="result__replay-button" tabindex="0"><${Button} onClick=${onReplay} disabled=${archived.status === 'processing' || replayExpired}>${t('回放')}<//></span><//>
+            ${shareUrl ? html`<${Button} onClick=${() => setShare(true)}>${t('分享对局')}<//>` : null}`
+            : html`<${Button} onClick=${() => openHistory()}>${t('游玩记录')}<//>`}</div>` : null}
         </footer>
+        ${archived && replayExpired ? html`<p class="result__expiry" role="status">${expiryHint(archived, replayNow)}</p>` : null}
       </section>
       <section class="result__players">
         <h2 class="brief-h"><span>${t('同盟成员')}</span><${MicroLabel}>ALLIANCE REPORT</${MicroLabel}></h2>
@@ -170,6 +192,13 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
           : html`<p class="t-dim">${t('暂无结算数据')}</p>`}
       </section>
     </main>
+    <${RestrictionsDialog} open=${info} onClose=${() => setInfo(false)} restrictions=${restrictions} />
+    <${Modal} open=${share} onClose=${() => setShare(false)} title=${t('分享对局')} micro="MATCH SHARE" class="replay-share" actions=${html`<${Button} onClick=${() => setShare(false)}>${t('关闭')}<//><${Button} variant="primary" icon="copy" onClick=${copyShare}>${t('复制链接')}<//>`}>
+      <p>${t('分享码')} <b class="num">${archived?.shareCode}</b></p>
+      <p>${t('持有链接的人可以查看本局结算和有效期内的回放，无需输入博士代号。')}</p>
+      <input class="replay-share__url" aria-label=${t('分享链接')} readonly value=${shareUrl} onFocus=${(e) => e.currentTarget.select()} />
+      <p class="t-lo">${t('请使用接收者能够访问的服务器地址；localhost 仅本机可用，局域网地址仅同一网络可用。')}</p>
+      <p class="t-lo">${archived ? expiryHint(archived, replayNow) : ''}</p>
+    <//>
   </div>`;
 }
-

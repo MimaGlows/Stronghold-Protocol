@@ -7,10 +7,10 @@ import { isObj } from './shared.js';
 // ---- the key map ------------------------------------------------------------------------------------------------
 
 /** The rebindable shortcuts in the settings' order (the ready key also pauses / resumes a solo battle). Esc is fixed. */
-export const HOTKEY_ACTIONS = Object.freeze(['refresh', 'freeze', 'levelUp', 'retreat', 'sell', 'ready']);
+export const HOTKEY_ACTIONS = Object.freeze(['refresh', 'freeze', 'levelUp', 'retreat', 'sell', 'ready', 'ping', 'radio']);
 
-/** Default key of each action (a KeyboardEvent.code): the keys of 0.1.4, so nothing changes for a player who never rebinds. */
-export const DEFAULT_HOTKEYS = Object.freeze({ refresh: 'KeyR', freeze: 'KeyF', levelUp: 'KeyD', retreat: 'KeyQ', sell: 'KeyX', ready: 'Space' });
+/** Default keys: communication uses Z/X and sell moves to C. Legacy custom maps are migrated below. */
+export const DEFAULT_HOTKEYS = Object.freeze({ refresh: 'KeyR', freeze: 'KeyF', levelUp: 'KeyD', retreat: 'KeyQ', sell: 'KeyC', ready: 'Space', ping: 'KeyZ', radio: 'KeyX' });
 
 // The keys a shortcut may use → the `key` value each types on a US layout (lower case): letters, digits, Space, the
 // punctuation keys, and six named keys whose `key` equals their `code`. Everything else stays with the interface: Esc
@@ -53,13 +53,32 @@ export function hotkeyLabel(code) {
  * Sanitize a persisted key map: each action keeps a saved key that may be a shortcut, else gets its default; a map in
  * which two actions would share a key is bad data — the defaults instead.
  * @param {any} raw
- * @returns {Record<'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready', string>}
+ * @returns {Record<'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'ping'|'radio', string>}
  */
 export function sanitizeHotkeys(raw) {
   const r = isObj(raw) && !Array.isArray(raw) ? raw : {};
   const out = {};
-  for (const a of HOTKEY_ACTIONS) out[a] = Object.hasOwn(r, a) && isBindableCode(r[a]) ? r[a] : DEFAULT_HOTKEYS[a];
-  return new Set(Object.values(out)).size === HOTKEY_ACTIONS.length ? out : { ...DEFAULT_HOTKEYS };
+  const legacy = !Object.hasOwn(r, 'ping') || !Object.hasOwn(r, 'radio');
+  // Reserve new keys before migrating old bindings. Keep all non-conflicting device choices.
+  for (const a of ['ping', 'radio']) out[a] = !legacy && Object.hasOwn(r, a) && isBindableCode(r[a]) ? r[a] : DEFAULT_HOTKEYS[a];
+  if (out.ping === out.radio) return { ...DEFAULT_HOTKEYS };
+  const used = new Set(Object.values(out));
+  const retained = new Set();
+  if (legacy) {
+    const old = HOTKEY_ACTIONS.filter((a) => a !== 'ping' && a !== 'radio').map((a) => Object.hasOwn(r, a) && isBindableCode(r[a]) ? r[a] : DEFAULT_HOTKEYS[a]).filter((code) => !used.has(code));
+    if (new Set(old).size !== old.length) return { ...DEFAULT_HOTKEYS };
+    for (const code of old) retained.add(code);
+  }
+  const spare = ['KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM', 'Delete', ...KEY_OF.keys()];
+  for (const a of HOTKEY_ACTIONS.filter((a) => a !== 'ping' && a !== 'radio')) {
+    let code = Object.hasOwn(r, a) && isBindableCode(r[a]) ? r[a] : DEFAULT_HOTKEYS[a];
+    if (used.has(code)) {
+      if (!legacy) return { ...DEFAULT_HOTKEYS };
+      code = spare.find((key) => !used.has(key) && !retained.has(key));
+    }
+    out[a] = code; used.add(code);
+  }
+  return out;
 }
 
 /**
@@ -103,7 +122,7 @@ export function hotkeyOf(e) {
  * key === 'r'`: a Russian layout or an IME still works by position). No modifier or focus checks (shortcutFor).
  * @param {{ key?: string, code?: string }} e
  * @param {any} [keys] the player's map (settings `keys`); the defaults when omitted
- * @returns {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|null}
+ * @returns {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'ping'|'radio'|null}
  */
 export function actionForKey(e, keys = DEFAULT_HOTKEYS) {
   const map = keys === DEFAULT_HOTKEYS ? keys : sanitizeHotkeys(keys);
@@ -138,13 +157,13 @@ export function captureHotkey(e) {
 
 /**
  * Map a keydown to a game shortcut under the player's key map (defaults: R refresh, F freeze, D level-up, Q retreat,
- * X sell, Space ready) or Esc (close; fixed). A shortcut key means its action even while a HUD button has focus (a
+ * C sell, Z ping, X radio, Space ready) or Esc (close; fixed). A shortcut key means its action even while a HUD button has focus (a
  * mouse click leaves the shop card / 刷新 focused, and Space must not re-trigger it); the caller prevents the button's
  * own activation. Enter still activates buttons (it cannot be a shortcut; behind the facing wheel only its ✕:
  * facingEnter). Nothing while Ctrl / ⌘ / Alt is held or a text field has the focus.
  * @param {{ key?: string, code?: string, ctrlKey?: boolean, metaKey?: boolean, altKey?: boolean, repeat?: boolean, target?: any }} e
  * @param {any} [keys] the player's map (settings `keys`)
- * @returns {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'escape'|null}
+ * @returns {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'ping'|'radio'|'escape'|null}
  */
 export function shortcutFor(e, keys = DEFAULT_HOTKEYS) {
   if (!e || e.ctrlKey || e.metaKey || e.altKey) return null;
@@ -199,7 +218,7 @@ export const closesOnFieldPress = (detail) => detail?.kind === 'piece' || detail
  * Whether an open overlay swallows a game shortcut: a modal / the guide own the keyboard (Esc included — they close
  * themselves); the 本局信息 / 敌方情报 drawer is a dialog too — only Esc (it closes the drawer) passes, the other
  * shortcuts never act behind it.
- * @param {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'escape'|null} act shortcutFor
+ * @param {'refresh'|'freeze'|'levelUp'|'retreat'|'sell'|'ready'|'ping'|'radio'|'escape'|null} act shortcutFor
  * @param {{ modal?: boolean, drawer?: boolean }} open
  */
 export function shortcutBlocked(act, { modal = false, drawer = false } = {}) {

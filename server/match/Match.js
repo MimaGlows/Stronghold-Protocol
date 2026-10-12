@@ -397,6 +397,8 @@ export class Match {
     this.hiddenReached = false;
     this.outcome = null;
     this._turnToken = 0;
+    this.recorder = null;
+    try { this.recorder = opts.createRecorder?.(this) || null; } catch (e) { this.log.error?.('[replay] init', e); }
   }
 }
 
