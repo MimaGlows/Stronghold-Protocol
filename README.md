@@ -2,11 +2,11 @@
 
 感谢 [sganggs/Stronghold-Protocol](https://github.com/sganggs/Stronghold-Protocol) 原作者及社区贡献者！此个人优化版本由 MimaGlows 基于原项目维护，借助 GPT-6.1-Sol 补充了一些方便日常游玩与联机的功能。目前基于官方 **v0.2.5**，具体介绍也可查看[小黑盒发布文章](https://www.xiaoheihe.cn/app/bbs/link/193523180)。
 
-**定制版源码**：[master](https://github.com/MimaGlows/Stronghold-Protocol/tree/master) · **Windows 便携包**：[Release 下载](https://github.com/MimaGlows/Stronghold-Protocol/releases/tag/v0.2.5-mimaglows.1)
+**定制版源码**：[master](https://github.com/MimaGlows/Stronghold-Protocol/tree/master) · **Windows 便携包**：[Release 下载](https://github.com/MimaGlows/Stronghold-Protocol/releases/tag/v0.2.5-mimaglows.2)
 
 ## 这个版本增加了什么？
 
-- **大厅匹配与房间补位**：好友队伍全员选择盟约后开始匹配；普通房间开启补位后采用房主预选优先的加权规则，撤销公开分享入口。接受邀请后可从原等待房间或匹配队列切换，加入失败保留原状态。
+- **大厅匹配与房间补位**：好友队伍全员选择盟约后开始匹配；普通房间开启补位后采用房主预选优先的加权规则，撤销公开分享入口。关闭补位后，队列补位玩家返回大厅，按原队伍、难度和预选自动继续匹配；原有成员和好友直接加入者保留。接受邀请后可从原等待房间或匹配队列切换，加入失败保留原状态。
 - **个人头像**：可以更换头像，并随虚拟账号保存在服务器上。
 - **虚拟账号与跨设备同步**：用「博士代号 + 四位代码」识别身份，代码可自行指定或随机生成。头像、游玩记录及干员配置等随账号保存，换设备后可以恢复，因此定制版移除了原来的数据导入、导出入口。
 - **继续当前对局**：换设备后可以接回仍在进行的对局；原窗口仍在线时，需要原窗口同意接管。服务器重启或对局结束后无法继续。
