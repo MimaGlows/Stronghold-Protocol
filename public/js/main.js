@@ -244,6 +244,7 @@ function wireNet() {
   net.on('matching.returned', backToLobby);
   net.on('room.closed', (msg) => {
     backToLobby();
+    if (msg.reason === 'invited') return;
     if (msg.reason === 'matching-name') { showMatchingAdmissionError({ code: 'MATCH_NAME' }); return; }
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');

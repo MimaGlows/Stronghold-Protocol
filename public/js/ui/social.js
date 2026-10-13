@@ -224,7 +224,7 @@ export function FriendsDrawer({ visible }) {
   useEffect(()=>()=>motion.current.forEach(a=>a?.cancel()),[]);
   const room = useStore((value) => value.room), me = useStore((value) => value.me.playerId);
   const party = useStore((value) => value.matching.party);
-  const canMatchInvite = !room && (!party || (party.phase === 'idle' && party.leaderId === me));
+  const canMatchInvite = !room && (!party || (['idle', 'searching', 'extended'].includes(party.phase) && party.leaderId === me));
   const canInvite = room?.mode === 'coop' && !room.inMatch && (!room.matching || room.matching.phase === 'idle') && room.seats?.some((seat) => seat?.playerId === me);
   useData('bands');
   if (!visible) return null;
@@ -254,15 +254,17 @@ export function FriendsDrawer({ visible }) {
 }
 export function SocialInviteHost() {
   const s = useStore((value) => value, Object.is, socialStore), room = useStore((value) => value.room);
+  const party = useStore((value) => value.matching.party);
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const invite = s.invites.find((item) => item.deadline > now);
   useEffect(() => { setBusy(false); }, [s.owner, invite?.inviteId]);
   if (!invite) return null;
   const respond = async (accept) => { setBusy(true); await socialAction(invite.kind === 'matching' ? 'matching.inviteRespond' : 'social.inviteRespond', { inviteId: invite.inviteId, accept }); setBusy(false); };
-  return html`<div class="social-invite-layer"><${Modal} open=${true} title=${invite.kind === 'matching' ? t('匹配队伍邀请') : t('同盟邀请')} micro="ALLIANCE INVITATION" width="min(480px,94vw)" onClose=${() => { void respond(false); }} actions=${html`<${Button} disabled=${busy} onClick=${() => { void respond(false); }}>${t('拒绝')}<//><${Button} variant="primary" disabled=${busy || !s.online || !!room?.inMatch || (invite.kind === 'matching' && !!room)} onClick=${() => { void respond(true); }}>${room && invite.kind !== 'matching' ? t('接受并离开当前同盟') : t('接受邀请')}<//>`}>
+  return html`<div class="social-invite-layer"><${Modal} open=${true} title=${invite.kind === 'matching' ? t('匹配队伍邀请') : t('同盟邀请')} micro="ALLIANCE INVITATION" width="min(480px,94vw)" onClose=${() => { void respond(false); }} actions=${html`<${Button} disabled=${busy} onClick=${() => { void respond(false); }}>${t('拒绝')}<//><${Button} variant="primary" disabled=${busy || !s.online || !!room?.inMatch} onClick=${() => { void respond(true); }}>${room || party ? t('接受并切换队伍') : t('接受邀请')}<//>`}>
     <p class="modal__text">${inviteNotificationText(invite)}</p>
     ${room?.inMatch ? html`<p class="modal__text">${t('请先退出当前对局；不会自动转移正在进行的游戏')}</p>` : null}
+    ${!room?.inMatch && (room || party) ? html`<p class="modal__text">${t('确认后退出当前房间或匹配队伍；加入失败时保留原状态。')}</p>` : null}
     <p class="modal__text">${t('邀请将在 {seconds} 秒后过期', { seconds: Math.max(0, Math.ceil((invite.deadline - now) / 1000)) })}</p>
   <//></div>`;
 }

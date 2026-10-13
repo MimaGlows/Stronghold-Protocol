@@ -14,6 +14,21 @@ export class MatchingParties {
     this.timer = setInterval(() => this.pump(), 1000); this.timer.unref?.();
   }
   of(session) { return this.parties.get(this.membership.get(session?.playerId)) || null; }
+  inviteable(p) { return !!p && ['idle', 'searching', 'extended'].includes(p.phase); }
+  // Call only after destination checks succeed; another tab may own this account's party seat.
+  leaveIdentity(session) {
+    const identity = this.service.identity(session);
+    for (const p of [...this.parties.values()]) for (const m of [...p.members]) {
+      if (m.identity !== identity) continue;
+      const member = this.session(m);
+      if (!member) continue;
+      const room = this.lobby.roomOf(member);
+      if (room?.queueGenerated && !room.match) {
+        this.lobby.leave(member); sendSession(member, { t: 'room.closed', reason: 'invited' });
+      }
+      this.leave(member);
+    }
+  }
   session(member) { return this.lobby.registry.byId(member.playerId); }
   view(p) {
     if (!p) return null;
@@ -74,14 +89,13 @@ export class MatchingParties {
   onHello(session) { const p=this.of(session); if(!p)return; const m=p.members.find((v)=>v.playerId===session.playerId); if(m.identity!==this.service.identity(session))this.leave(session); else if(!m.connected) { m.connected=true; this.publish(p); } }
   invite(session, identity, difficulty) {
     let p = this.of(session);
-    if (p && (p.phase !== 'idle' || p.leaderId !== session.playerId)) return fail(ERR.MATCH_LOCKED);
+    if (p && (!this.inviteable(p) || p.leaderId !== session.playerId)) return fail(ERR.MATCH_LOCKED);
     if (!this.lobby.social.related(session, identity) || identity === this.service.identity(session)) return fail(ERR.BAD_TARGET);
     const targets = this.lobby.social.sessions(identity); if (!targets.length) return fail(ERR.NOT_READY);
-    if ([...this.parties.values()].some((v) => v.members.some((m) => m.identity === identity))) return fail(ERR.MATCH_LOCKED);
+    if (p?.members.some((m) => m.identity === identity)) return fail(ERR.ALREADY);
     const d = p?.difficulty || difficulty;
     if (!DIFFICULTIES.includes(d)) return fail(ERR.BAD_MSG);
-    const target = targets.find((s) => !this.lobby.roomOf(s) && !this.of(s)); if (!target) return fail(ERR.MATCH_LOCKED);
-    if (this.lobby.social.playingElsewhere(target, null)) return fail(ERR.ROOM_STARTED);
+    const target = targets[0];
     const c = this.service.checkSession(target, d, this.service.store.get(identity).preference || null); if (c.error) return c;
     const ids = p?.members.map((m) => m.identity) || [this.service.identity(session)];
     if (ids.some((id) => this.service.store.blocked(id, identity))) return fail(ERR.MATCH_BLOCKED);
@@ -97,14 +111,19 @@ export class MatchingParties {
   emitInvite(s, i) { const p = this.parties.get(i.partyId); if (p) this.lobby.social.emit(s, 'social.invite', { kind: 'matching', inviteId: i.id, from: i.from, difficulty: p.difficulty, expiresAt: i.expiresAt, serverNow: this.lobby.now() }); }
   respond(session, msg) {
     const i = this.invites.get(msg.inviteId), p = i && this.parties.get(i.partyId);
-    if (!i || i.to !== this.service.identity(session) || !p || p.phase !== 'idle' || i.expiresAt <= this.lobby.now()) return fail(ERR.MATCH_STALE);
+    if (!i || i.to !== this.service.identity(session) || !this.inviteable(p) || i.expiresAt <= this.lobby.now()) return fail(ERR.MATCH_STALE);
     if (!msg.accept) { this.endInvite(i, 'declined'); this.publish(p); return ok; }
-    if (this.of(session) || this.lobby.roomOf(session)) return fail(ERR.MATCH_LOCKED);
-    if (this.lobby.social.playingElsewhere(session, null) || [...this.parties.values()].some((v) => v.members.some((m) => m.identity === i.to))) return fail(ERR.MATCH_LOCKED);
+    if (this.lobby.roomOf(session)?.match || this.lobby.social.playingElsewhere(session, null)) return fail(ERR.ROOM_STARTED);
+    if (p.members.some((m) => m.identity === i.to)) return fail(ERR.ALREADY);
     if (p.members.length >= MAX_SEATS) return fail(ERR.ROOM_FULL);
     const c = this.check(p, false); if (c.error) return c;
     const checked = this.service.checkSession(session, p.difficulty, this.service.store.get(i.to).preference || null); if (checked.error) return checked;
     if (p.members.some((m) => this.service.store.blocked(m.identity, i.to))) return fail(ERR.MATCH_BLOCKED);
+    this.leaveIdentity(session);
+    if (this.lobby.roomOf(session)) {
+      this.lobby.leave(session); sendSession(session, { t: 'room.closed', reason: 'invited' });
+    }
+    if (p.attempt) this.cancel(p);
     p.members.push({ playerId: session.playerId, identity: i.to, name: session.profile.name, ready: false, connected: true }); this.membership.set(session.playerId, p.id);
     this.endInvite(i, 'accepted'); this.publish(p); return ok;
   }
@@ -215,7 +234,7 @@ export class MatchingParties {
     if (this.pumping) return;
     this.pumping = true;
     try {
-      for (const i of [...this.invites.values()]) if (i.expiresAt <= this.lobby.now() || this.parties.get(i.partyId)?.phase !== 'idle') { const p = this.parties.get(i.partyId); this.endInvite(i, 'expired'); this.publish(p); }
+      for (const i of [...this.invites.values()]) if (i.expiresAt <= this.lobby.now() || !this.inviteable(this.parties.get(i.partyId))) { const p = this.parties.get(i.partyId); this.endInvite(i, 'expired'); this.publish(p); }
       let queue = [...this.parties.values()].filter((p) => !!p.attempt && ['searching','extended'].includes(p.phase)).sort((a,b) => a.attempt.order-b.attempt.order);
       for (const p of queue) { if (this.check(p).error) this.cancel(p); else if (p.phase === 'searching' && this.lobby.now()-p.attempt.startedAt >= (this.lobby.opts.matchmakingWaitMs ?? MATCH_WAIT_MS)) { p.phase = 'extended'; this.publish(p); } }
       queue = queue.filter((p) => !!p.attempt);

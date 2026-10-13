@@ -235,10 +235,10 @@ test('two invited parties stay in the lobby and merge atomically with the oldest
   assert.equal(JSON.stringify(room.toState()).includes('"seed"'),false); assert.equal(JSON.stringify(service(f).parties.view(p)).includes('"seed"'),false);
 });
 
-test('cancel is free, preserves original party, resets ready, rerolls once, and locks invitations',async(t)=>{
+test('cancel is free, preserves original party, resets ready, rerolls once, and locks non-leader invitations',async(t)=>{
   const f=await fixture(t),[a,b,c]=await players(f,3),p=await party(f,[a,b]);
   await start(f,a); const old={partyId:p.id,attemptId:p.attempt.id,revision:p.revision},seed=p.attempt.seed;
-  assert.equal((await a.request({t:'matching.invite',identity:'博士丙#0003',difficulty:'NORMAL'})).code,'MATCH_LOCKED');
+  assert.equal((await b.request({t:'matching.invite',identity:'博士丙#0003',difficulty:'NORMAL'})).code,'MATCH_LOCKED');
   assert.equal((await a.request({t:'matching.cancel',...old,revision:old.revision-1})).code,'MATCH_STALE');
   await f.request(a,{t:'matching.cancel',...old}); assert.equal(p.phase,'idle'); assert.equal(p.members.length,2); assert.equal(p.members[1].ready,false);
   assert.equal(service(f).store.get('博士甲#0001').bannedUntil,0);

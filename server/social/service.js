@@ -213,7 +213,7 @@ export class SocialService {
         if (this.playingElsewhere(session, live.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
         if (msg.t === 'social.join') {
           if (live.room.match) return fail(N_('对方已开始模拟，可以观战'), ERR.ROOM_STARTED);
-          return this.capacityResult(this.lobby.joinRoom(session, live.room), false);
+          return this.capacityResult(this.lobby.joinRoom(session, live.room, { leaveParty: true }), false);
         }
         if (!live.room.match) return fail(N_('对方的模拟已结束'));
         return this.capacityResult(this.lobby.spectateRoom(session, live.room), true);
@@ -259,7 +259,7 @@ export class SocialService {
     if (!accept) { this.end(invite, 'declined'); return ok; }
     const current = this.lobby.roomOf(session);
     if (current?.match || this.playingElsewhere(session, invite.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
-    const result = this.capacityResult(this.lobby.joinRoom(session, invite.room), false);
+    const result = this.capacityResult(this.lobby.joinRoom(session, invite.room, { leaveParty: true }), false);
     if (result.error) return result;
     this.end(invite, 'accepted'); return ok;
   }

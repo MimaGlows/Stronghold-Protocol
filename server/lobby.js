@@ -575,7 +575,7 @@ export class Lobby {
     return this.joinRoom(session, this.publicRoom(code));
   }
 
-  joinRoom(session, room) {
+  joinRoom(session, room, { leaveParty = false } = {}) {
     if (!room || room.disposed || this.rooms.get(room.code) !== room) return fail(ERR.ROOM_NOT_FOUND);
     const cur = this.roomOf(session);
     // idempotent for members; a spectator of this room goes on below: it may take a free player seat (header)
@@ -592,7 +592,8 @@ export class Lobby {
     }
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
-    if (cur) this.removeMember(cur, session.playerId);
+    if (leaveParty) this.matchmakingService.parties.leaveIdentity(session);
+    if (this.roomOf(session)) this.removeMember(this.roomOf(session), session.playerId);
     room.seats[idx] = this.humanSeat(idx, session);
     session.roomCode = room.code;
     session.notice = null;
