@@ -69,6 +69,7 @@ export async function startServer(opts = {}) {
   // The process-wide singleton serves the default data dir; a custom dir (tests) gets its own copy.
   const data = opts.dataDir ? loadData(dataDir, { log }) : getData({ dir: dataDir, log });
   const replays = opts.replayArchive || (opts.recording === false || (opts.port === 0 && !opts.replayDir) ? null : new ReplayArchive(opts.replayDir || path.join(ROOT, 'logs/replays'), log));
+  try { await replays?.ready; } catch (error) { await replays?.close(); throw error; }
   const { registry, lobby, network } = createSessionStack({ ...opts, replayArchive: replays, profiles: opts.profileStore || (opts.profileDir || replays ? new ProfileStore(opts.profileDir || path.join(replays.dir, 'profiles')) : null) }, { data, log });
   if (lobby.profiles) lobby.accountStats = new AccountStats(lobby.profiles, replays, log);
   lobby.social.migrate();

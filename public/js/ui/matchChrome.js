@@ -70,6 +70,7 @@ export function ExitModal({ open, onClose, solo, onAway }) {
   const [busy, setBusy] = useState(null);
   // a spectator seat (community report #26) only leaves its seat: nothing of the match is given up
   const spectator = useStore((s) => isSpectating(s.room, s.me.playerId));
+  const penalizedQuit = useStore((s) => !!s.match.public?.matchmaking && s.match.private?.alive !== false);
   const quit = async () => {
     setBusy('quit');
     await quitMatch();
@@ -96,6 +97,7 @@ export function ExitModal({ open, onClose, solo, onAway }) {
       ${!solo ? html`<${Button} variant="ice" icon="robot" loading=${busy === 'away'} onClick=${away}>${t('暂离（AI 托管）')}<//>` : null}
       <${Button} variant="danger" icon="exit" loading=${busy === 'quit'} onClick=${quit}>${t('放弃模拟')}<//>`}>
     <div class="exitm">
+      ${penalizedQuit ? html`<p class="t-red">${t('匹配开局后放弃将禁用匹配30分钟、1小时、3小时或24小时；掉线可在10分钟内重连。')}</p>` : null}
       ${solo
         ? html`<p>${t(EXIT_TEXT.soloRest)}</p><p class="t-lo">${t(EXIT_TEXT.soloQuit)}</p>`
         : html`<p>${tParts('{away}：由 AI 托管你的席位（自动部署、准备与选择），随时可以返回。', { away: html`<b class="t-ice">${t('暂离')}</b>` })}</p>

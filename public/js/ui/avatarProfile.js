@@ -4,6 +4,7 @@ import { identity, net as profileNet } from '../net.js';
 import { doctorIdentity, doctorProfileKey } from '../../../shared/doctor.js';
 import { DEFAULT_AVATAR, isAvatarChoice, sameAvatar } from '../../../shared/avatar.js';
 import { toast } from './toasts.js';
+import { showMatchingAvatarNotice } from './matchingFeedback.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
 export const AVATAR_PREF = 'sp.avatar';
@@ -152,7 +153,8 @@ export function installAvatarSync({ net, target = avatarStore, notify = (text) =
         timer = setTimeout(() => void sync(), 1200);
       } else {
         target.set({ sync: 'error' });
-        notify(N_('头像暂未保存到服务器，请保持页面打开，重连后重试'));
+        if (error.code === 'MATCH_LOCKED' && avatar.kind === 'custom') void showMatchingAvatarNotice();
+        else notify(N_('头像暂未保存到服务器，请保持页面打开，重连后重试'));
       }
     }
   }

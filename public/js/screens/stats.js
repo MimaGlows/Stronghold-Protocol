@@ -13,6 +13,7 @@ import { profileViewStore, loadProfileView } from '../ui/profileView.js';
 import { accountStatsStore, refreshStats } from '../ui/accountStats.js';
 import { openHistory } from '../replay/history.js';
 import { countsTowardStats, selfRowOf, roundsOf, recordToResult, MAX_RECORDS, FULL_KEEP } from '../../../shared/stats.js';
+import { useMatchingPrivacy } from '../ui/matchingIdentity.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -202,6 +203,7 @@ function Replay({ rec, onBack }) {
 function StatsScreen({ tab, target }) {
   const ready = useData('config', 'bands', 'assets');
   const gd = useMemo(() => makeLookups(ready), [ready, data.locale()]);
+  const hidden = useMatchingPrivacy();
   const stats = useStore((s) => s, Object.is, target ? profileViewStore : accountStatsStore);
   const [replay, setReplay] = useState(null);
   const boxRef = useRef(null);
@@ -245,7 +247,7 @@ function StatsScreen({ tab, target }) {
         </div>
       </div>
     </header>
-    <p class="st-note"><${Icon} name="info" />${target ? t('正在查看其他博士的服务器记录') : t('服务器数据：跟随当前伪账号保存，跨浏览器与重启后可恢复。')} <b>${stats.profileKey || t('尚未连接伪账号')}</b></p>
+    <p class="st-note"><${Icon} name="info" />${target ? t('正在查看其他博士的服务器记录') : t('服务器数据：跟随当前虚拟账号保存，跨浏览器与重启后可恢复。')} <b>${(hidden ? stats.profileKey?.split('#')[0] : stats.profileKey) || t('尚未连接虚拟账号')}</b></p>
     ${stats.error ? html`<p class="st-note is-warn" role="status">${stats.error}<${Button} size="sm" onClick=${() => target ? loadProfileView(target) : refreshStats()}>${t('重试')}<//></p>` : null}
     <main class="st-body" data-tab=${tab}>
       ${!ready || stats.loading && !stats.records.length ? html`<div class="st-loading"><${Spinner} size="md" /></div>`

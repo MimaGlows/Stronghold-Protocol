@@ -6,7 +6,8 @@
 //     (config.economy.poolCopies[tier], measured identity overrides; co-op shared stock doubled). `left` is the
 //     signed capacity minus occupation; the public left() and shop sampling clamp a deficit to zero.
 //   * Owning a piece takes copies: a normal piece holds 1, an elite holds 3 (merge of 3 normals). Shop displays
-//     do NOT reserve copies; buying fails (SOLD_OUT) when left = 0.
+//     do NOT reserve copies. An item buy fails (SOLD_OUT) when left = 0; an operator card already shown in the shop or a
+//     reward can still be taken and overdraws (a negative raw left, the debt — GitHub #498, the owner's decision).
 //   * Pieces remember how many copies they hold (`piece.poolCopies`), so selling / elimination / temp wipes return
 //     exactly what was taken — chess granted by effects while the pool is empty (or hidden/banned chess) hold 0.
 //   * Invariant: raw left ≤ cap and raw left + Σ held copies == cap. Mimic can exceed stock, but its copies still occupy it.
@@ -14,8 +15,9 @@
 // Rolls: each chess slot draws ONE copy uniformly from all remaining copies of eligible chess with tier ≤ shop level
 // ("copy-weighted"; duplicates within a roll allowed). The item slot picks a tier with the same tier shares, then a
 // uniform shop-eligible item of that tier (falling back to lower tiers). A roll may add entries outside the pool
-// (`extra`, after its own): one player's 自选 stock (0.2.0, player/diy.js diyRollEntries) — weighted by its copies like
-// any chess, drawn by that player's shop only.
+// (`extra`, after its own): one player's 自选 stock — the ordinary shop passes diyRollEntries (the shopLevel gate);
+// the promotion reward and random grants pass diyStockEntries (the roll's own tier, DESIGN §30.23). Weighted by its
+// copies like any chess, drawn by that player only.
 
 /**
  * Per-match disabled bond set D and banned chess (research 01 A2): D = uniform sample of `core` core bonds and `addon`
@@ -25,16 +27,18 @@
  * @param {Function} rng seeded rng (createRng)
  * @returns {{ drawn: string[], staticOff: string[], banned: string[] }}
  */
-export function drawDisabledBonds(gd, rng) {
+export function drawDisabledBonds(gd, rng, protectedBonds = [], weights = null) {
   const { core: nCore, addon: nAddon } = gd.bans(gd.difficulty);
   const staticOff = [...gd.modeInactiveBonds].filter((b) => gd.bond(b)).sort();
   const eligible = gd.bondIds.filter((b) => {
     const bond = gd.bond(b);
     return bond && Number(bond.weight) > 0 && !gd.modeInactiveBonds.has(b);
   });
-  const core = eligible.filter((b) => gd.bond(b).isCore);
+  const protectedSet = new Set(protectedBonds);
+  const core = eligible.filter((b) => gd.bond(b).isCore && !protectedSet.has(b));
+  if (protectedSet.size && core.length < nCore) throw new Error('Too many protected core bonds');
   const addon = eligible.filter((b) => !gd.bond(b).isCore);
-  const drawn = [...sample(core, nCore, rng), ...sample(addon, nAddon, rng)].sort();
+  const drawn = [...(weights ? weightedSample(core, nCore, rng, weights) : sample(core, nCore, rng)), ...sample(addon, nAddon, rng)].sort();
   const off = new Set([...drawn, ...staticOff]);
   const banned = [];
   for (const id of gd.visibleChess) {
@@ -43,6 +47,17 @@ export function drawDisabledBonds(gd, rng) {
     if (bonds.length > 0 && bonds.every((b) => off.has(b))) banned.push(id);
   }
   return { drawn, staticOff, banned };
+}
+
+function weightedSample(arr, n, rng, weights) {
+  const remaining = [...arr], picked = [];
+  for (let i = 0; i < n && remaining.length; i++) {
+    const total = remaining.reduce((sum, id) => sum + (weights[id] ?? 4), 0);
+    let target = rng() * total, index = remaining.length - 1;
+    for (let j = 0; j < remaining.length; j++) { target -= weights[remaining[j]] ?? 4; if (target < 0) { index = j; break; } }
+    picked.push(...remaining.splice(index, 1));
+  }
+  return picked;
 }
 
 function sample(arr, n, rng) {

@@ -1,0 +1,415 @@
+{
+  "files": [
+    {
+      "sha256": "fbf818c93bc7ca6bf651b2794392a883f45b9d970198e5f8a00734293b265a7f",
+      "path": "data/Sensitivewords/网站敏感词库/CensorWords.txt",
+      "gitBlob": "47b2e3abc497ec1fd40821ad5e5d543590acb654",
+      "file": "47b2e3abc497ec1fd40821ad5e5d543590acb654.txt",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "8927c9b36a3190fe8f187c81afd22006aaf78129a93a4dac3036f3d57507e921",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/key.txt",
+      "gitBlob": "50518090b162063a189f0ca97d1b9ce0395d92c3",
+      "file": "50518090b162063a189f0ca97d1b9ce0395d92c3.txt",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "064e4fc2cd294f13216d850275565c7e813dfb0d9c159ecd6b65ff89626297c8",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/其他词库.txt",
+      "gitBlob": "fbfc878448b9102de11df681ba0ba2954c4a8d9d",
+      "file": "fbfc878448b9102de11df681ba0ba2954c4a8d9d.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "f98727374ab46ba84632f92e49f55f97a0e0fbbef37e864d70659f7a305186cf",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/反动词库.txt",
+      "gitBlob": "51e908f3b307cf341d2e92f1cc53dabc4c891b99",
+      "file": "51e908f3b307cf341d2e92f1cc53dabc4c891b99.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "1405e70ac118a0c68fab248b028d2431edc8dda8223d63e96303106ab43e9409",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/暴恐词库.txt",
+      "gitBlob": "8c0564b0aa7b1f5cccbb9ff0331fa547b5e715ec",
+      "file": "8c0564b0aa7b1f5cccbb9ff0331fa547b5e715ec.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "16ec5b4df4992cb6b181a5952372b7f4d8894807af12cffdabd0d9f0e8677d52",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/民生词库.txt",
+      "gitBlob": "c952e63eb6cdb57336b698875ee2df664580830c",
+      "file": "c952e63eb6cdb57336b698875ee2df664580830c.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "dd75f0c28830da01ed113af38f8efe754cc3b742ce90a945d0427cbfe6e4b698",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/色情词库.txt",
+      "gitBlob": "b9ee54a333484afaae3e53f1b74b82f64846835c",
+      "file": "b9ee54a333484afaae3e53f1b74b82f64846835c.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "07307bf956e4ca41b5f12808e20d3fa2440692d3f8614d345933b37401ec897b",
+      "path": "data/Sensitivewords/网站敏感词库/JasonYSU的敏感词库/贪腐词库.txt",
+      "gitBlob": "e236d48531ac2c7a186dd0250aca85cc9639a542",
+      "file": "e236d48531ac2c7a186dd0250aca85cc9639a542.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "ab3fd27e6836f65cf6397ee99ad344fb087205a1f58c2cade5443259242e87ec",
+      "path": "data/Sensitivewords/网站敏感词库/badword.src.php",
+      "gitBlob": "d3782069e57d496364e653b8dbadec088bbdee43",
+      "file": "d3782069e57d496364e653b8dbadec088bbdee43.php",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "03b394a59531b7c375d51f4f20246a21fff16eb8b474ae5f4b41f9c0508e7811",
+      "path": "data/Sensitivewords/网站敏感词库/dictionaries/chinese_dictionary.txt",
+      "gitBlob": "3040d9d0ecd0b701ca1d05e9b556d6153e46b9ad",
+      "file": "3040d9d0ecd0b701ca1d05e9b556d6153e46b9ad.txt",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "7dc975c07a57212ce0575ce27c76d8d8422bd0098ec4f10ec08956315667bfd2",
+      "path": "data/Sensitivewords/网站敏感词库/dictionaries/english_dictionary.txt",
+      "gitBlob": "95ff180b24893355dca86283206245f2b7f4ecd0",
+      "file": "95ff180b24893355dca86283206245f2b7f4ecd0.txt",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "ff4a8cc5dca01a02bb9772472ba20e65f9fc15221f956ba9e98997276c7556c6",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/其它.txt",
+      "gitBlob": "1730288c11203eab39b6c7391b12d07289d2c076",
+      "file": "1730288c11203eab39b6c7391b12d07289d2c076.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "f74eb78f50001108fe7a9c2755e6ea1e3a3576f4ca6274a3eabdc1b1ea05677c",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/其它次要的适合于后台审核的敏感词.txt",
+      "gitBlob": "49e7ee59f68786617ef6d8202eed1235aa97fdde",
+      "file": "49e7ee59f68786617ef6d8202eed1235aa97fdde.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "aaf653c27b527e3631d5c2a9e649af14e2a39c00dfd9f30ca64f4f76630db6dd",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/广告、非法信息类.txt",
+      "gitBlob": "fb2040f59044f64daa2e0f2b9e5edf0fbe06e462",
+      "file": "fb2040f59044f64daa2e0f2b9e5edf0fbe06e462.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "7e7ed9581bb3293f19fd8fe63963e860708dda36eb94596197dcf8f1272814c6",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/恶意网站实验室--恶意网址集.txt",
+      "gitBlob": "ba0460082cff69731f9a59bb782faba791e2af81",
+      "file": "ba0460082cff69731f9a59bb782faba791e2af81.txt",
+      "encoding": "utf-8",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "cf2d33b01189cd582b6e1612085f36e808eadcf9845d445626dc20167d1fcc56",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/政治类.txt",
+      "gitBlob": "115f5ab03a41580e9f88413b8c10a56397d9045b",
+      "file": "115f5ab03a41580e9f88413b8c10a56397d9045b.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "67045c5eec2e9609928a323ef4c44f82093ad2e852142e4df0c2387fe128bc7f",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/时事类.txt",
+      "gitBlob": "fe2e0c30125480976d1dd1d92c9214cb541d1c03",
+      "file": "fe2e0c30125480976d1dd1d92c9214cb541d1c03.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "aab97340acdef79979f68c90baabe8111e618269be52813674207c78bb62563c",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/涉枪涉爆违法信息关键词.txt",
+      "gitBlob": "be605a83b230654e80a81aaa395d79bcc3e67536",
+      "file": "be605a83b230654e80a81aaa395d79bcc3e67536.txt",
+      "encoding": "utf-16le",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "5b2958d976af12e64018de192742f8a3e0a4e91d10c09770c0c608154b0a4af1",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/清理整治网上涉性用品药品非法信息关键词.txt",
+      "gitBlob": "10d25fa07e7e8b61fac838ea5b7fabdaae854f61",
+      "file": "10d25fa07e7e8b61fac838ea5b7fabdaae854f61.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "e8975c2b6d572f9bf3a20fc3b95497a63b62b5fd91f749e054ab27e60e5285d7",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/网站敏感词1.txt",
+      "gitBlob": "50c87186aa4d5dca8e2c7a99638bc91afa5cc050",
+      "file": "50c87186aa4d5dca8e2c7a99638bc91afa5cc050.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "58e5f69a3634104854866df47de295c5db2c39c00ad1d50f66e454d4cd5abab2",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/色情类.txt",
+      "gitBlob": "64aebbe54b4c68a110128a066e0a48f533f85db3",
+      "file": "64aebbe54b4c68a110128a066e0a48f533f85db3.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "c5c71f14615d095158775df3cd97c92caf01b2848a0acec7d30465002641f37b",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/药物毒品类.txt",
+      "gitBlob": "e128181b243532433d81a595e2ebb82f170bdeba",
+      "file": "e128181b243532433d81a595e2ebb82f170bdeba.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "9a5c2f493294ede0a6bf9c71aaac63a5e310300c39f352ba3225d4b1ae55e91e",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/论坛需要过滤的不良词语大全.txt",
+      "gitBlob": "3927558abd8ecaedf5a44939d11da4fe950ac557",
+      "file": "3927558abd8ecaedf5a44939d11da4fe950ac557.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "c32cfcc4b6decb84e54d1694233f953c9436f4777d55bff28cdbfbfe1f7af809",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/迷信、邪教类.txt",
+      "gitBlob": "33f2cd0a4c3a44d3cba3447e17f4e7b6e80255e4",
+      "file": "33f2cd0a4c3a44d3cba3447e17f4e7b6e80255e4.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "ced998881a2c9d6d4e11470669f50b3d9f26c28eef594c8aae8f0da710f900da",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/领导名人类.txt",
+      "gitBlob": "37fc6b86f57c4e168b4c4a556b55f6767c1df8f8",
+      "file": "37fc6b86f57c4e168b4c4a556b55f6767c1df8f8.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "b8adcbd1cd501d53ff87b2dae23c5650afda9c0456e2275c5cefa774e6bc4376",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/2012年最新敏感词列表/骂人、讽刺类.txt",
+      "gitBlob": "a3723e566adc6273a1c4bd29ea24bfa8c93ce24e",
+      "file": "a3723e566adc6273a1c4bd29ea24bfa8c93ce24e.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "af6e888b959ee46b468e96cad6f8d753011851a3194afa1507d92d054c4fc45a",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/8000多个敏感词过滤 让你的论坛网站安全Words/8000多个敏感词过滤 让你的论坛网站安全Words.txt",
+      "gitBlob": "c6f329f3c003c9f9d184a2e19eff210bf2c9cbbd",
+      "file": "c6f329f3c003c9f9d184a2e19eff210bf2c9cbbd.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 1057
+    },
+    {
+      "sha256": "f249236e1291e36dc920406bb55e5b96f10c42920c455fc6e6928764371b894a",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/CensorWords/CensorWords.txt",
+      "gitBlob": "4818a2bb54145c7cd4ef381d66906e8787565cad",
+      "file": "4818a2bb54145c7cd4ef381d66906e8787565cad.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "29ccb0aa12067d4299dcd53536377efc338936ca22e22a5f0411d86585a57aad",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词/敏感词库大全.txt",
+      "gitBlob": "55f8d7f56d3a1738d65a60447bc55d1cdbdf5e8b",
+      "file": "55f8d7f56d3a1738d65a60447bc55d1cdbdf5e8b.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "12b61cca9e922ec3880b278bbb38ee4f38f1be535a9a31630d36afd6826ef63c",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/disu.txt",
+      "gitBlob": "a2d2d78d55b75e6e7a7c8ef57e2b28d556e27b8c",
+      "file": "a2d2d78d55b75e6e7a7c8ef57e2b28d556e27b8c.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "8bbd4357ca506ec0e0ba54a0cd9118d158c6a456cda8af6510606645d03dd7da",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/gucai.txt",
+      "gitBlob": "548bcc2f684baa0ac30668793b9a04937566bf1c",
+      "file": "548bcc2f684baa0ac30668793b9a04937566bf1c.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "5c9a6036b7f1dbb8ced7abe9ac155e70e1e68e58805a55663667e739581807a3",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/huaxue.txt",
+      "gitBlob": "02d898ca413e6e5d97c4b805237677a7868a3699",
+      "file": "02d898ca413e6e5d97c4b805237677a7868a3699.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "f02d781c2c188fcb081462ed27e748856a943ac1440abd9f0731c686b0c9d1fb",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/junshi.txt",
+      "gitBlob": "fb1e50df6aeb7838abb8806b59a9cb80d8dd92e0",
+      "file": "fb1e50df6aeb7838abb8806b59a9cb80d8dd92e0.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "75c31c5f185766355086d5f611f61638a6afabce522957ce6af4287bf3349409",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/nvxing.txt",
+      "gitBlob": "4b864e942ee5ece7cda01624720c21c2707e20fe",
+      "file": "4b864e942ee5ece7cda01624720c21c2707e20fe.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "3f1f76822b536842e448a9425eef6fe73806748a27d473799a4abfb046b71a81",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/qicai.txt",
+      "gitBlob": "fc9282e4c11f1919807d5a05477affcdd1ef5893",
+      "file": "fc9282e4c11f1919807d5a05477affcdd1ef5893.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "6b8cb26e09462046aaa8a15bdfe56c493ef351b3151175efa388d6f0706121a5",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/seqing.txt",
+      "gitBlob": "cc6173113ac7ded627ea3e7540d3e7c59389a765",
+      "file": "cc6173113ac7ded627ea3e7540d3e7c59389a765.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "69fa8435aaae183053abb4ba5c90aefff16410c3d48dc5b9282b22e34d6332a3",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/shehui.txt",
+      "gitBlob": "5e282692ee983991e0b726c5a7e937bf3462e081",
+      "file": "5e282692ee983991e0b726c5a7e937bf3462e081.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "b83cc7d09bfab7e177e6a647ad7ecc414116cedb12af2edb6fe9f7e893ac6982",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/xiejiao.txt",
+      "gitBlob": "b117db22c5242a1b684f0680e201db779ffb445d",
+      "file": "b117db22c5242a1b684f0680e201db779ffb445d.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "84e821723193a6bf31ae66c7839577bff4f63ebeba33e84a1ed9b2077376c854",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/yinsi.txt",
+      "gitBlob": "98da2703cb3c5ee0cd92c483588f114dddbd8238",
+      "file": "98da2703cb3c5ee0cd92c483588f114dddbd8238.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "cd6da13d43111d3e0a0dd03fdb446743fba2ca4f42426e8d1d0fcea1cdd02014",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/zhengfu.txt",
+      "gitBlob": "50849ea8e63218d39b0060806a64bc23916cbfc9",
+      "file": "50849ea8e63218d39b0060806a64bc23916cbfc9.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "cace3f597aaf916ad5c3b5f12c77f2d2fb80ac609fc6033a087e69f8199ca5ce",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词1/BBSCH/zhengzhi.txt",
+      "gitBlob": "c51df3fc0d73e02c5232fa283d16d99168923646",
+      "file": "c51df3fc0d73e02c5232fa283d16d99168923646.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "34de094eaf67127b0cf26e7b415c3b11ec5a31b8668111ffa57b81a0cc192a8d",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词2/全部词库.txt",
+      "gitBlob": "a86ed61bbf359b7432ac11bb5a59c1679b97d216",
+      "file": "a86ed61bbf359b7432ac11bb5a59c1679b97d216.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "245d925020062515c65e0e760a04cd4e08c581fff955d18fc8109ee47f555076",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词过滤/01.txt",
+      "gitBlob": "abd0fd4891a25e9e90932b4b137e71b1a48a7f1a",
+      "file": "abd0fd4891a25e9e90932b4b137e71b1a48a7f1a.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "7ea2f051518a450facf8bd4ecc69cbaf14b7fe523c05713dc1f850ca34d76047",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词过滤/02.txt",
+      "gitBlob": "15d15a19236cbb56a3249fbc397ce113eefef7b9",
+      "file": "15d15a19236cbb56a3249fbc397ce113eefef7b9.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "baadc6e2cd468760dd79cf6511389acafaf531aa93940933994c5a4c74a5c99f",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词过滤/CensorWords.txt",
+      "gitBlob": "2d5c3a3a1d930edbe11045bbd8a5a137f2b49851",
+      "file": "2d5c3a3a1d930edbe11045bbd8a5a137f2b49851.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "9e45dfc993ac752779d3a9ee30db8386ee54f839874e64f08a6dc2a4ca09824e",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库/敏感词过滤/CensorWords2.txt",
+      "gitBlob": "9c76aa71cae0d7dcd66316868b44799f04dbf381",
+      "file": "9c76aa71cae0d7dcd66316868b44799f04dbf381.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "29ccb0aa12067d4299dcd53536377efc338936ca22e22a5f0411d86585a57aad",
+      "path": "data/Sensitivewords/网站敏感词库/敏感词库大全.txt",
+      "gitBlob": "55f8d7f56d3a1738d65a60447bc55d1cdbdf5e8b",
+      "file": "55f8d7f56d3a1738d65a60447bc55d1cdbdf5e8b.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "d242d781eb7472c88e55e169b5b6da92d1333a4d69361d2d1e29328f05ca1831",
+      "path": "data/Sensitivewords/网站敏感词库/百度敏感词/百度敏感词.txt",
+      "gitBlob": "a0c0825e661dc655af9b9d662cad508d2455b6f1",
+      "file": "a0c0825e661dc655af9b9d662cad508d2455b6f1.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    },
+    {
+      "sha256": "483499c93777e6ae3bf5f1af78bcf59b9f42df9585d2b8cae21d8377ef9a7806",
+      "path": "data/Sensitivewords/网站敏感词库/百度敏感词/百度过滤词.txt",
+      "gitBlob": "c1cd2cf8f80d60a121e605f89cc30b742cf08ed8",
+      "file": "c1cd2cf8f80d60a121e605f89cc30b742cf08ed8.txt",
+      "encoding": "gb18030",
+      "decodingWarnings": 0
+    }
+  ],
+  "commit": "401e169ef20f863679f2d82b98f3dc944ac58917",
+  "source": "https://github.com/Go0p/emmmm/tree/master/data/Sensitivewords/网站敏感词库",
+  "count": 1483,
+  "sha256": "5f69e134a84466c214ba7890aa28edad8b46450c653894dd0504e0ba2f4afe35",
+  "conversion": "NFKC/lowercase, zero-width and separator removal; exact literals; UTF-8, UTF-16 or GB18030; <=12 UTF-16 units",
+  "exclusions": {
+    "count": 71122,
+    "reason": "Invalid/too long entries or unclassified/general/non-explicit nonpolitical terms",
+    "regression": "ma from 其他词库 and 百度过滤词 excluded by category, no MimaGlows allowlist"
+  },
+  "policyVersion": 2,
+  "abuseCount": 56,
+  "abuseSha256": "3e077f0e2bf434ff3eb43f72b265ae811f16c494eac59336b8a52e8ed1f6324b",
+  "categories": {
+    "political": "反动词库|政治类|时事类|领导名人类|迷信、邪教类|BBSCH\\/(?:zhengfu|zhengzhi|xiejiao)\\.txt",
+    "abusiveSources": "色情词库|色情类|骂人、讽刺类|BBSCH\\/(?:seqing|disu)\\.txt|english_dictionary",
+    "explicitNonPolitical": "傻[逼屄]|[操肏]你|[操肏]他|[操肏]她|[操肏]妈|你妈[逼屄]|鸡巴|阴茎|阴道|阴蒂|龟头|肛交|口交|[强輪轮]奸|精液|射精|裸聊|做爱|卖淫|嫖娼|淫乱|色情|性交|兽交|援交|娘炮|婊子|杂种|王八蛋|狗娘养"
+  },
+  "policy": "Political: normalized substring, unchanged categorized source terms. Nonpolitical: explicit Chinese substrings, English whole token or whole compact callsign. Generic mixed lists, admin terms and meaningless short terms excluded."
+}

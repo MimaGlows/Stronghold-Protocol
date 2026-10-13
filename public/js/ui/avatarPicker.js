@@ -4,9 +4,10 @@ import { useStore } from '../store.js';
 import { data, useData } from '../data.js';
 import { avatarUrl } from '../assets.js';
 import { t, N_ } from '../../../shared/i18n.js';
-import { DEFAULT_AVATAR, sameAvatar, checkAvatarChoice } from '../../../shared/avatar.js';
+import { MATCHING_AVATAR, DEFAULT_AVATAR, sameAvatar, checkAvatarChoice } from '../../../shared/avatar.js';
 import { avatarStore, openAvatar, closeAvatar, commitAvatar, rememberedProfileName } from './avatarProfile.js';
 import { readAvatarImage, cropRect, encodeAvatar } from './avatarImage.js';
+import { showMatchingAvatarNotice } from './matchingFeedback.js';
 
 export function playerAvatarSrc(choice, manifest) {
   if (choice?.kind === 'custom') return choice.dataUrl;
@@ -15,6 +16,8 @@ export function playerAvatarSrc(choice, manifest) {
 }
 
 export function PlayerAvatar({ avatar, ...props }) {
+  const matching = useStore((s) => !!s.matching?.restricted || !!s.room?.matching?.rules || !!s.match.result?.matching);
+  if (matching && avatar?.kind === 'custom') avatar = MATCHING_AVATAR;
   useData('assets');
   return html`<${AvatarFrame} ...${props} src=${playerAvatarSrc(avatar, data.get('assets'))} />`;
 }
@@ -44,6 +47,7 @@ export function avatarCatalog(manifest, records) {
 }
 
 function AvatarPicker() {
+  const matching = useStore((s) => !!s.matching?.restricted || !!s.room?.matching?.rules || !!s.match.result?.matching);
   useData('assets'); useData('chess'); useData('backups');
   const manifest = data.get('assets'), chess = data.get('chess'), backups = data.get('backups');
   const catalog = useMemo(() => avatarCatalog(manifest, [...Object.values(chess || {}), ...Object.values(backups || {})]), [manifest, chess, backups]);
@@ -82,6 +86,7 @@ function AvatarPicker() {
     setBusy(true); setError('');
     try {
       const next = image ? await encodeAvatar(image, crop.zoom, crop.x, crop.y) : draft;
+      if (matching && next.kind === 'custom') { void showMatchingAvatarNotice(); return; }
       if (seq !== operation.current) return;
       const checked = checkAvatarChoice(next, manifest);
       if ('error' in checked) throw new Error(N_('当前头像无效或素材尚未加载'));
@@ -119,7 +124,8 @@ function AvatarPicker() {
         <p class="avatar-picker__caption">${image ? t('拖动调整位置') : selected?.label || (draft.kind === 'custom' ? t('自定义头像') : draft.kind === 'operator' ? t('干员头像') : t('默认头像'))}</p>
         ${image ? html`<label class="avatar-zoom">${t('缩放')}<input aria-label=${t('头像缩放')} type="range" min="1" max="4" step="0.01" value=${crop.zoom}
           onInput=${(e) => setCrop((c) => ({ ...c, zoom: Number(e.currentTarget.value), x: rect.x, y: rect.y }))} /></label>` : null}
-        <${Button} class="avatar-upload" size="sm" disabled=${busy} onClick=${() => uploadRef.current.click()}>${t('上传图片')}<//>
+        <${Button} class="avatar-upload" size="sm" disabled=${busy || matching} onClick=${() => uploadRef.current.click()}>${t('上传图片')}<//>
+        ${matching ? html`<small>${t('匹配期间只能使用默认或干员头像')}</small>` : null}
         <${Button} class="avatar-reset" size="sm" variant="ghost" disabled=${busy} onClick=${() => choose(DEFAULT_AVATAR)}>${t('恢复默认')}<//>
         <small>${t('PNG / JPEG / WebP，最大 5 MB')}</small>
       </section>

@@ -49,16 +49,22 @@ export function applyTextSize(v) {
   if (el) el.dataset.text = TEXT_SIZES.includes(v) ? v : 'sm';
 }
 
+function applyMatchingMotion(value) {
+  if (globalThis.document?.documentElement) document.documentElement.dataset.matchingMotion = value;
+}
+
 settingsStore.subscribe((s) => {
   savePref('settings', sanitizeSettings(s));
   audio.setVolumes(s);
   audio.setVoicePreferences(s);
   applyTextSize(s.textSize);
+  applyMatchingMotion(s.matchingMotion);
 });
 audio.setVolumes(settingsStore.get());
 audio.setVoicePreferences(settingsStore.get());
 // before the first render (main.js boot renders after its imports ran): the stored step is on screen without a flash
 applyTextSize(settingsStore.get().textSize);
+applyMatchingMotion(settingsStore.get().matchingMotion);
 
 /** @param {Partial<ReturnType<typeof sanitizeSettings>>} patch */
 export function updateSettings(patch) {
@@ -216,7 +222,7 @@ function PrivacySettings({ s }) {
         <option value="none">${t('均不可见')}</option><option value="friends">${t('仅好友')}</option><option value="friends_recent">${t('好友和最近同游玩家')}</option>
       </select>
     </div>
-    <p class="set-hint">${ready ? t('设置随伪账号保存，服务器保存成功后生效；资料范围按你的好友和最近五场队友判断。') : t('请先登录伪账号，再修改好友与资料权限。')}</p>
+    <p class="set-hint">${ready ? t('设置随虚拟账号保存，服务器保存成功后生效；资料范围按你的好友和最近五场队友判断。') : t('请先登录虚拟账号，再修改好友与资料权限。')}</p>
   </section>`;
 }
 
@@ -287,6 +293,8 @@ export function SettingsModal({ open, onClose }) {
                  onInput=${(v) => { updateSettings({ sfx: v }); if (!tested) { setTested(true); setTimeout(() => setTested(false), 400); audio.sfx('click'); } }} />
       <${Toggle} label=${t('静音')} micro="MUTE" value=${s.muted} onChange=${(v) => updateSettings({ muted: v })} />
       <${Toggle} label=${t('显示伤害数字')} micro="DAMAGE NUMBERS" value=${s.damageNumbers} onChange=${(v) => updateSettings({ damageNumbers: v })} />
+      <${Toggle} label=${t('官方伤害数字')} micro="OFFICIAL NUMBERS" value=${s.officialDamageNumbers} onChange=${(v) => updateSettings({ officialDamageNumbers: v })} />
+      <p class="set-hint">${t('只显示达到官方暴击条件的红色数字。关闭时仍显示每一次命中。')}</p>
       <div class="set-row">
         <span class="set-row__label">${t('画面质量')}<${MicroLabel}>QUALITY<//></span>
         <div class="set-seg" role="radiogroup">
@@ -302,6 +310,12 @@ export function SettingsModal({ open, onClose }) {
         </div>
       </div>
       <p class="set-hint set-textsize-note">${t('调整界面文字大小，棋盘保持原比例。')}</p>
+      <div class="set-row set-row--matching-motion">
+        <span class="set-row__label">${t('匹配动画')}<${MicroLabel}>MATCHING MOTION<//></span>
+        <div class="set-seg" role="radiogroup" aria-label=${t('匹配动画')} data-testid="matching-motion">
+          ${[['full',t('完整动画')],['reduced',t('减少动画')]].map(([id,label]) => html`<button type="button" role="radio" aria-checked=${s.matchingMotion === id ? 'true' : 'false'} class=${s.matchingMotion === id ? 'is-on' : ''} onClick=${() => updateSettings({ matchingMotion:id })}>${label}</button>`)}
+        </div>
+      </div>
       <${PrivacySettings} s=${s} />
       <${HotkeySection} keys=${s.keys} touchUi=${touchUi} />
       <${DiagSection} />

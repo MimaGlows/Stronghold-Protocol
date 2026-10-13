@@ -12,6 +12,7 @@ export function SetupReroll({ pub }) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const vote = pub.rerollVote;
+  if (pub.matchmaking) return null;
   const host = myId === hostId;
   const players = pub.players || [];
   const me = players.find((p) => p.playerId === myId && p.status !== 'left');

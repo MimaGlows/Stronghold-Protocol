@@ -178,7 +178,7 @@ function drawStrip(cv, { labels = true } = {}) {
 
 // ---- panel ----------------------------------------------------------------------------------------------------------
 
-const PANEL_KEY = 'sp.dev.battlePerfPanel';
+const PANEL_KEY = 'sp.matchmaking.dev.battlePerfPanel';
 function loadPanelPref() {
   try { return localStorage.getItem(PANEL_KEY); } catch { return null; }
 }

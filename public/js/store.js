@@ -79,6 +79,7 @@ export const initialState = Object.freeze({
   me: { playerId: null, name: '', token: null },
   session: { entered: false },
   room: null,
+  matching: { identity: null, blocks: [], bannedUntil: 0, preference: null, party: null, restricted: false, offset: 0 },
   match: emptyMatch(),
   ticker: [],
   emotes: [],
@@ -100,7 +101,7 @@ export function selectRoute(s) {
   const phase = s.match?.public?.phase;
   if (phase && phase !== PHASE.LOBBY) return 'game';
   if (s.room?.inMatch) return 'game'; // match starting: m.public is on its way
-  if (s.room) return 'room';
+  if (s.room && !s.room.matching?.generated) return 'room';
   return 'lobby';
 }
 

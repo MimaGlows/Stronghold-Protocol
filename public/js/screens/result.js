@@ -16,6 +16,9 @@
 //                          activatedLayers?, lpLost?, perfectRounds? } }] }
 
 import { useEffect, useState } from '../../vendor/hooks.module.js';
+import { net } from '../net.js';
+import { toastError } from '../ui/toasts.js';
+import { MatchingResult } from '../ui/matchmaking.js';
 import { html, Button, Icon, MicroLabel, DifficultyTag, Tooltip, useTicker, Modal } from '../ui/components.js';
 import { useGameData, Img, UnitThumb, BandIcon, PlayerAvatar, BondGlyph, LpTower, Sprite } from '../ui/gameComponents.js';
 import { normalizeResult, fmtNum, diyRecordFor, cardStandIn, standInForText } from '../ui/gameLogic.js';
@@ -115,10 +118,10 @@ export function ResultScreen({ archived = null, archivedPlayerId = null, onBack 
   const livePub = useStore((s) => s.match.public);
   const liveId = useStore((s) => s.me.playerId);
   const hasRoom = useStore((s) => !!s.room);
-  const back = onBack || (() => store.set({ match: emptyMatch() }));
+  const back = onBack || (() => { if (liveRes?.matching?.generated) void net.request('matching.return', { matchId: liveRes.matching.id }).catch(toastError); else store.set({ match: emptyMatch() }); });
   return html`<${ResultView} res=${archived ? archived.result : liveRes}
     pub=${archived ? archived.nodes?.at(-1)?.public : livePub} myId=${archivedPlayerId || liveId}
-    backLabel=${shared ? t('关闭分享') : archived ? t('返回记录') : hasRoom ? t('返回同盟') : t('返回大厅')}
+    backLabel=${shared ? t('关闭分享') : archived ? t('返回记录') : hasRoom && !liveRes?.matching?.generated ? t('返回同盟') : t('返回大厅')}
     onBack=${back} quiet=${!!archived} archived=${archived} onReplay=${onReplay} archiveActions=${true} />`;
 }
 
@@ -187,6 +190,7 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
         ${archived && replayExpired ? html`<p class="result__expiry" role="status">${expiryHint(archived, replayNow)}</p>` : null}
       </section>
       <section class="result__players">
+        ${!archived ? html`<${MatchingResult} result=${res} myId=${myId} />` : null}
         <h2 class="brief-h"><span>${t('同盟成员')}</span><${MicroLabel}>ALLIANCE REPORT</${MicroLabel}></h2>
         ${r.players.length ? r.players.map((p) => html`<${PlayerCard} key=${p.playerId} p=${p} myId=${myId} titles=${titles} best=${best} solo=${r.players.length < 2} />`)
           : html`<p class="t-dim">${t('暂无结算数据')}</p>`}

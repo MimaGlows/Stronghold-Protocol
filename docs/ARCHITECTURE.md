@@ -1,5 +1,7 @@
 # ARCHITECTURE.md — a map of the code
 
+本隔离副本额外包含用户授权的[实验匹配模式](MATCHMAKING.md)：`server/matchmaking/`管理大厅好友队伍、匹配调度、普通房间补位和独立限制存储，`public/js/ui/matchmaking.js`提供界面，普通房间及战斗模拟器保持原规则。
+
 For a newcomer who wants to find their way before changing something. This file only maps the code. The contracts are
 in the design document — [DESIGN.md](DESIGN.md) is its index, the current rules are in `docs/design/` (§5 the battle
 engine: [design/engine.md](design/engine.md); §6 the match: [design/match.md](design/match.md); §8 the protocol and §14
@@ -195,3 +197,6 @@ public/assets/ ─────────▶ public/js/render/, public/js/audio
 Before changing a rule, read the DESIGN section that owns it (module headers cite their sections; the table in
 DESIGN.md names the file that holds each) and the official source; a rule no source settles is marked `[ASSUMED]`
 ([CONTRIBUTING.md](../CONTRIBUTING.md) §3).
+
+
+定制 v0.2.5-mimaglows.1：大厅匹配、房间补位开关、预选盟约加权禁用、分享撤销及匹配隐私规则见 [MATCHMAKING.md](MATCHMAKING.md)。历史实验交付中的70%补位保护及关闭后继续匹配规则已由本版替代。回放定期兼容性检查使用只读 Worker 和文件指纹缓存，主线程提交前复核指纹；启动等待首次索引，失败保留旧报告并重试，关闭清理 Worker。

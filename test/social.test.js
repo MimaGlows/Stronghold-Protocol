@@ -69,23 +69,21 @@ test('account privacy gates friend shortcuts and record reads, preserving link/i
   assert.deepEqual(f.server.lobby.profiles.read('隐私博士', '0001'), before);
   await f.restart(); const restored = await f.open('隐私博士#0001'); assert.deepEqual(restored.welcome.profilePreferences.socialPrivacy, before.preferences.socialPrivacy);
 }, { real: true }));
-test('social search supports partial callsigns and exact codes, caps results, and restores its index after restart', async () => fixture(async (f) => {
-  const a = await f.open('搜索者#0001');
-  for (const [name, code] of [['星光', '0001'], ['星光', '0002'], ['星光博士', '0003'], ['Starlight', '0004']]) f.server.lobby.profiles.resolve(name, code);
-  const search = async (value) => { assert.equal((await intent(a, 'social.search', value)).t, 'ok'); return a.waitFor('social.search'); };
-  assert.deepEqual((await search('星光')).entries.map((row) => row.identity), ['星光#0001', '星光#0002', '星光博士#0003']);
-  assert.equal((await search('STAR')).entries[0].identity, 'Starlight#0004');
-  assert.deepEqual((await search('星光#0002')).entries.map((row) => row.identity), ['星光#0002']);
-  assert.deepEqual((await search('光#0002')).entries, [], 'code makes the callsign exact');
-  assert.equal(validateC2S({ t: 'social.search', identity: '#0001' }), 'bad field identity');
-  assert.equal(validateC2S({ t: 'social.search', identity: '星光#001' }), 'bad field identity');
-  assert.equal(validateC2S({ t: 'social.add', identity: '星光' }), 'bad field identity');
-  for (let i = 0; i < 25; i++) f.server.lobby.profiles.resolve(`容量${i}`, '0001');
-  const limited = await search('容量'); assert.equal(limited.entries.length, 20); assert.equal(limited.truncated, true);
-  assert.ok(!JSON.stringify(limited).includes('history')); assert.ok(!JSON.stringify(limited).includes('token'));
-  await f.restart(); const b = await f.open('搜索者#0001'); await intent(b, 'social.search', '星光');
-  assert.equal((await b.waitFor('social.search')).entries.length, 3);
+test('social search requires a complete exact identity and restores its index after restart', async () => fixture(async (f) => {
+  const a = await f.open('查找者#0001');
+  await f.open('搜索测试甲#1001'); await f.open('搜索测试乙#1002');
+  assert.equal((await a.request({ t: 'social.search', identity: '搜索测试' })).t, 'error');
+  const reply = await a.request({ t: 'social.search', identity: '搜索测试甲#1001' }); assert.equal(reply.t, 'ok');
+  const found = await a.waitFor('social.search'); assert.equal(found.entries.length, 1); assert.equal(found.entry.identity, '搜索测试甲#1001');
+  assert.equal((await a.request({ t: 'social.search', identity: '搜索测试甲#9999' })).t, 'ok');
+  assert.equal((await a.waitFor('social.search')).entries.length, 0);
+  assert.equal((await a.request({ t: 'social.search', identity: '搜索测试#1001' })).t, 'ok');
+  assert.equal((await a.waitFor('social.search')).entries.length, 0);
+  await f.restart(); const again = await f.open('查找者#0001');
+  assert.equal((await again.request({ t: 'social.search', identity: '搜索测试甲#1001' })).t, 'ok');
+  assert.equal((await again.waitFor('social.search')).entries.length, 1);
 }));
+
 test('recent list uses five settled matches, complete identity, excludes AI/self/friends and deduplicates', () => {
   const person = (name, code, isBot = false) => ({ name, doctorCode: code, isBot });
   const history = Array.from({ length: 7 }, (_, i) => ({ ended: true, endedAt: 100-i, participants: [person('本人','0001'), person('同名','0001'), person('同名',String(i+2).padStart(4,'0')), person('机器人','0099',true), { name: '旧缺代码' }] }));

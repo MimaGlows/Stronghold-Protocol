@@ -2,7 +2,8 @@
 .friends-panel{height:100dvh;background:linear-gradient(135deg,#15271ff7,#09120ffb);border-left:2px solid var(--mint-500);box-shadow:-12px 0 36px #0009;display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform 260ms cubic-bezier(.22,.7,.2,1),visibility 0s 260ms;pointer-events:none}
 .friends-drawer.is-open .friends-panel{transform:translateX(0);visibility:visible;transition-delay:0s;pointer-events:auto}
 .friends-handle{pointer-events:auto;position:absolute;right:0;top:38%;width:38px;min-height:92px;border:1px solid var(--mint-500);color:var(--mint-500);background:#10251ef5;display:flex;flex-direction:column;gap:8px;align-items:center;justify-content:center;cursor:pointer;transition:right 260ms cubic-bezier(.22,.7,.2,1)}
-.friends-drawer.is-open .friends-handle{right:var(--friends-width)}
+.friends-drawer.is-open .friends-handle{right:0;transform:translateX(calc(-1 * var(--friends-width)))}
+.friends-drawer .friends-panel,.friends-drawer .friends-handle{transition:none!important}
 .friends-handle .icon{width:22px;height:22px}.friends-handle b{border-radius:50%;background:var(--mint-500);color:#08120e;min-width:19px}
 .friends-panel>header{position:relative;padding:20px 18px 12px;border-top:5px solid var(--mint-500);border-bottom:1px solid #456157}
 .friends-panel>header::before{content:"";position:absolute;inset:-5px 0 auto;height:5px;background:repeating-linear-gradient(135deg,var(--mint-500) 0 10px,#173529 10px 20px);pointer-events:none}

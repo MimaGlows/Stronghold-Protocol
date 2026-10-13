@@ -1,5 +1,6 @@
 import { isPingTarget, COMMUNICATION_PHASES, RADIO_LINES } from './communication.js';
 import { isSocialIdentity, isSocialSearch, isSocialPrivacy } from './social.js';
+import { CORE_PREFERENCES } from './matchmaking.js';
 import { isVoicePreferences } from './voice.js';
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
@@ -381,6 +382,23 @@ const target = (v) => {
 
 /** @type {Record<string, Record<string, (v:any)=>boolean> & { $optional?: string[] }>} */
 export const C2S = {
+  'matching.sync': {},
+  'matching.create': { difficulty: (v) => DIFFICULTIES.includes(v) },
+  'matching.setEnabled': { on: isBool, bond: (v) => v === null || CORE_PREFERENCES.includes(v), revision: (v) => isInt(v, 0, 1e9), $optional: ['bond'] },
+  'matching.roomPrepare': { bond: (v) => v === null || CORE_PREFERENCES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
+  'matching.preference': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), bond: (v) => v === null || CORE_PREFERENCES.includes(v), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9), $optional: ['difficulty','revision','partyId'] },
+  'matching.invite': { identity: isSocialIdentity, difficulty: (v) => DIFFICULTIES.includes(v) },
+  'matching.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), accept: isBool },
+  'matching.start': { partyId: (v) => v === null || (typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v)), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
+  'matching.prepare': { partyId: (v) => v === null || (typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v)), difficulty: (v) => DIFFICULTIES.includes(v), bond: (v) => v === null || CORE_PREFERENCES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
+  'matching.difficulty': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
+  'matching.ready': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), ready: isBool, revision: (v) => isInt(v, 0, 1e9), attemptId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), $optional: ['attemptId'] },
+  'matching.leave': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
+  'matching.return': { matchId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
+  'matching.cancel': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), revision: (v) => isInt(v, 0, 1e9), attemptId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
+  'matching.timeoutChoice': { attemptId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), choice: (v) => ['start', 'wait', 'ai'].includes(v) },
+  'matching.block': { identity: isSocialIdentity, matchId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
+  'matching.unblock': { identity: isSocialIdentity },
   // session & lobby
   'social.sync': {},
   'social.search': { identity: isSocialSearch },
@@ -490,8 +508,10 @@ export const S2C = [
   'profile.transferRequest', 'profile.transferPending', 'profile.transferEnded',
   'profile.stats', 'profile.stats.changed',
   'welcome', 'ok', 'error', 'pong',
-  'room.state', 'room.closed',
+  'room.state', 'room.closed', 'matching.state', 'matching.returned',
   'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.communication', 'm.result',
+  // Own live bond layer gain; ephemeral, never replayed on resync.
+  'm.layer',
   // m.unitStats { seq, round, units: [unitStatsEntry] } — the answer to g.unitStats (the requester only)
   'm.unitStats',
   // client-side combat (DESIGN §14): b.start { battleId, fieldId, kind, spec, authoritative, startAt, serverNow, elapsed,

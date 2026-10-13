@@ -12,6 +12,8 @@
 // config.json mode texts come localized from data.js.
 
 import { ContinueMatchButton } from '../ui/continueMatch.js';
+import { validPreference } from '../../../shared/matchmaking.js';
+import { MatchingAccount, MatchingStartButton, MatchingQueue, MatchingCooldown } from '../ui/matchmaking.js';
 import { HostingCredit } from '../ui/hostingCredit.js';
 import { requestInvitePermissionOnGesture } from '../ui/social.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
@@ -26,7 +28,7 @@ import { LoadoutButton } from './loadout.js';
 import { AvatarButton } from '../ui/avatarPicker.js';
 import { net, identity } from '../net.js';
 import { store, useStore, shallowEqual, loadPref, savePref } from '../store.js';
-import { getConfig, getMode, getStage, useData } from '../data.js';
+import { data, getConfig, getMode, getStage, useData } from '../data.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 
 /** Official mode texts (activity_table act2autochess.modeDataDict), fallback when config.json is absent. */
@@ -223,10 +225,10 @@ function ModeCard({ card, selected, onSelect }) {
   </button>`;
 }
 
-function DifficultyCard({ roomMode, difficulty, selected, onSelect }) {
+function DifficultyCard({ roomMode, difficulty, selected, onSelect, disabled = false }) {
   const info = difficultyInfo(roomMode, difficulty);
   return html`<button type="button" class=${`diff-card${selected ? ' is-selected' : ''}`}
-      style=${`--d-color:${DIFFICULTY_COLORS[difficulty]}`} onClick=${() => onSelect(difficulty)} aria-pressed=${selected ? 'true' : 'false'}>
+      style=${`--d-color:${DIFFICULTY_COLORS[difficulty]}`} disabled=${disabled} onClick=${() => onSelect(difficulty)} aria-pressed=${selected ? 'true' : 'false'}>
     <span class="diff-card__bar" aria-hidden="true"></span>
     <span class="diff-card__head">
       <${DifficultyIcon} difficulty=${difficulty} class="diff-card__glyph" />
@@ -244,6 +246,8 @@ function DifficultyCard({ roomMode, difficulty, selected, onSelect }) {
 
 /** Lobby screen component. */
 export function LobbyScreen() {
+  const hasMatchingParty = useStore((s) => !!s.matching.party);
+  const hideDoctorCode = useStore((s) => !!s.matching.restricted || !!s.room?.matching?.rules);
   const me = useStore((s) => s.me, shallowEqual);
   const conn = useStore((s) => s.connection, shallowEqual);
   useData('config');
@@ -252,6 +256,11 @@ export function LobbyScreen() {
     const d = loadPref('lobby.difficulty', 'FUNNY');
     return DIFFICULTIES.includes(d) ? d : 'FUNNY';
   });
+  const matching = useStore((s) => s.matching);
+  const party = matching.party;
+  const selectedDifficulty = party?.difficulty || difficulty;
+  const displayMode = party ? 'coop' : roomMode;
+  const matchingLocked = party && party.phase !== 'idle';
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(null);
   const [recent] = useState(recentRooms);
@@ -262,8 +271,12 @@ export function LobbyScreen() {
   const online = conn.status === 'online';
   const codeOk = CODE_RE.test(code);
 
-  const pickMode = (m) => { setRoomMode(m); savePref('lobby.mode', m); };
-  const pickDifficulty = (d) => { setDifficulty(d); savePref('lobby.difficulty', d); };
+  const pickMode = (m) => { if (party) return; setRoomMode(m); savePref('lobby.mode', m); };
+  const pickDifficulty = (d) => {
+    if (party) { if (party.leaderId !== me.playerId || matchingLocked) return; void net.request('matching.difficulty', { difficulty: d, partyId: party.id, revision: party.revision }).catch(toastError); }
+    else { setDifficulty(d); if (matching.preference && !validPreference({ config: data.getRaw('config') }, d, matching.preference)) { void net.request('matching.preference', { bond: null, difficulty: d }).catch(toastError); toast(t('切换难度后，原阵营偏好不可用，已清空'), 'warn'); } }
+    savePref('lobby.difficulty', d);
+  };
 
   const run = async (kind, fn) => {
     if (inFlight.current) return;
@@ -307,7 +320,7 @@ export function LobbyScreen() {
     store.set((s) => ({ session: { ...s.session, entered: false } }));
   };
 
-  return html`<div class="screen lobby-screen">
+  return html`<div class=${`screen lobby-screen${hasMatchingParty ? ' has-matching-party' : ''}`}>
     <header class="topbar">
       <div class="topbar__left">
         <${Button} variant="ghost" size="sm" icon="chevronLeft" onClick=${backToTitle} title=${t('返回标题')}>${t('返回')}<//>
@@ -330,7 +343,7 @@ export function LobbyScreen() {
           <${AvatarButton} size="sm" name=${me.name} avatar=${me.avatar} seat=${0} self=${true} />
           <button type="button" class="me-chip__text stats-entry" onClick=${openStats} title=${t('统计数据')} aria-label=${t('统计数据')}>
             <span class="me-chip__name">${me.name || t('博士')}</span>
-            <${MicroLabel}>${me.playerId != null ? `DOCTOR #${me.doctorCode || doctorNo(me.playerId)}` : 'DOCTOR'}<//>
+            <${MicroLabel}>${me.playerId != null && !hideDoctorCode ? `DOCTOR #${me.doctorCode || doctorNo(me.playerId)}` : 'DOCTOR'}<//>
           </button>
           <${Icon} name="chart" class="me-chip__stats" />
         </div>
@@ -341,7 +354,7 @@ export function LobbyScreen() {
       <section class="lobby-left">
         <div class="section-label"><span class="section-label__idx num">01</span>${t('模拟方式')}<${MicroLabel}>MODE<//></div>
         <div class="mode-cards">
-          ${MODE_CARDS.map((c) => html`<${ModeCard} key=${c.id} card=${c} selected=${roomMode === c.id} onSelect=${pickMode} />`)}
+          ${MODE_CARDS.map((c) => html`<${ModeCard} key=${c.id} card=${c} selected=${displayMode === c.id} onSelect=${pickMode} />`)}
         </div>
 
         <div class="section-label"><span class="section-label__idx num">03</span>${t('加入同盟')}<${MicroLabel}>JOIN WITH ALLIANCE KEY<//></div>
@@ -367,22 +380,26 @@ export function LobbyScreen() {
       <section class="lobby-right">
         <div class="section-label"><span class="section-label__idx num">02</span>${t('模拟难度')}<${MicroLabel}>DIFFICULTY<//></div>
         <div class="diff-list">
-          ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${pickDifficulty} />`)}
+          ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${displayMode} difficulty=${d} selected=${selectedDifficulty === d} disabled=${!!matchingLocked || (party && party.leaderId !== me.playerId)} onSelect=${pickDifficulty} />`)}
         </div>
-        <div class="create-box">
+        <div class="create-box matching-create-box"><span class="matching-create-spacer" aria-hidden="true"></span>
           <${Tooltip} block=${true} text=${online ? null : t('正在连接服务器…')}>
-            <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online} onClick=${create}>
+            <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online || !!party} onClick=${create}>
               ${roomMode === 'solo' ? t('开始独立模拟') : t('创建同盟')}
             <//>
           <//>
+          <${MatchingAccount} iconOnly=${true} />
+          <${MatchingStartButton} difficulty=${selectedDifficulty} online=${online} />
           <div class="create-box__hint">
             ${online
               ? html`<span>${roomMode === 'solo' ? t('创建后即可开始模拟') : t('创建后可邀请好友或添加 AI 队友')}</span>`
               : html`<${Spinner} size="sm" label="CONNECTING" />`}
           </div>
+          <${MatchingCooldown} />
         </div>
       </section>
     </div>
+    <${MatchingQueue} online=${online} />
     <footer class="local-hosting-footer"><${HostingCredit} /></footer>
   </div>`;
 }

@@ -24,6 +24,11 @@ for (const field of record.fields) {
       if (ticks % 3 === 0 || b.finished) emit();
     }
     if (!b.finished) { b.forceEnd(field.result?.reason || 'timeout'); emit(); }
+    // The recorded browser timeline can outlast the reconstructed battle. Keep its final state
+    // visible until the recorded end, without inventing combat events or dropping the last frame.
+    if (field.frames.at(-1)?.gt < cap) field.frames.push({
+      gt: cap, snap: b.snapshot(), progress: battleProgress(b), ev: [],
+    });
     field.endGt = field.endGt ?? b.time;
     // Explicitly label reconstructed frames; these are not captured video of a client's renderer.
     field.source = 'simulation';

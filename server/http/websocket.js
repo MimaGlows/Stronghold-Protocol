@@ -7,6 +7,7 @@
 //     clientAddress; local/LAN peers are exempt) 429; server full (maxConnections) or shutting down 503.
 
 import { WebSocketServer } from 'ws';
+import path from 'node:path';
 import { Network, SessionRegistry, NET_DEFAULTS } from '../net.js';
 import { Lobby } from '../lobby.js';
 import { splitUrl } from './common.js';
@@ -27,6 +28,7 @@ export function createSessionStack(opts, { data, log }) {
   const lobbyOptions = lobbyOptionsFrom(opts);
   const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, replayArchive: opts.replayArchive, options: lobbyOptions });
   lobby.profiles = opts.profiles || null;
+  lobby.matchmakingService.configure(opts.matchmakingDir || (lobby.profiles ? path.join(lobby.profiles.dir, '..', 'matchmaking') : null));
   if (lobby.profiles) lobby.profiles.onSave = (profile) => lobby.social.profileSaved(profile);
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   return { registry, lobby, network };

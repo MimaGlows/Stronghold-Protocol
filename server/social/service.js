@@ -3,7 +3,7 @@ import { N_ } from '../../shared/i18n.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { sendSession } from '../net.js';
 import { doctorIdentity, doctorProfileKey } from '../../shared/doctor.js';
-import { DEFAULT_AVATAR } from '../../shared/avatar.js';
+import { MATCHING_AVATAR, DEFAULT_AVATAR } from '../../shared/avatar.js';
 import { ERR, PHASE } from '../../shared/constants.js';
 import { MAX_FRIENDS, INVITE_TTL_MS, INVITE_COOLDOWN_MS, participantIdentity, recentCoPlayers, presenceRank, sanitizeSocialPrivacy, canViewProfile } from '../../shared/social.js';
 const ok = { ok: true };
@@ -23,7 +23,7 @@ export class SocialService {
       const matches=[];
       for(const r of p.statistics?.records||[]) {
         const a=this.lobby.accountStats.rawArchive(r.id);
-        if(!a?.result || ['abandoned','interrupted'].includes(a.result.reason)) continue;
+        if(!a?.result || a.isMatchingMatch || ['abandoned','interrupted'].includes(a.result.reason)) continue;
         if(!a.participants?.some(x=>participantIdentity(x)===participantIdentity(p))) continue;
         matches.push({id:r.id,endedAt:a.endedAt||r.t,participants:a.participants.filter(x=>!x.isBot&&participantIdentity(x)).map(({name,doctorCode})=>({name,doctorCode}))});
       }
@@ -33,7 +33,7 @@ export class SocialService {
     }
   }
   remember(ctx,summary) {
-    if(['abandoned','interrupted'].includes(summary.reason)) return;
+    if(ctx.matching || ['abandoned','interrupted'].includes(summary.reason)) return;
     const participants=ctx.profiles.map(o=>({name:o.profile.name,doctorCode:o.profile.code}));
     for(const o of ctx.profiles) {
       const p=this.lobby.profiles.read(o.profile.name,o.profile.code); if(!p)continue;
@@ -95,9 +95,9 @@ export class SocialService {
   row(identity, index, extra = {}, viewer = null) {
     const profile = this.lookup(identity); if (!profile) return null;
     const live = index.get(identity), room = live?.room;
-    const avatar = profile.avatar || DEFAULT_AVATAR;
+    const avatar = live && this.lobby.matchmakingService.restricted(live.session) && profile.avatar?.kind === 'custom' ? MATCHING_AVATAR : profile.avatar || DEFAULT_AVATAR;
     const privacy = sanitizeSocialPrivacy(profile.preferences?.socialPrivacy);
-    const row = { identity, name: profile.name, code: profile.code, status: live?.status || 'offline', canViewProfile: canViewProfile(viewer, profile), avatarRevision: createHash('sha256').update(JSON.stringify(avatar)).digest('hex').slice(0, 16), ...extra };
+    const row = { identity, name: profile.name, hideCode: this.lobby.matchmakingService.rules(room), code: profile.code, status: live?.status || 'offline', canViewProfile: canViewProfile(viewer, profile), avatarRevision: createHash('sha256').update(JSON.stringify(avatar)).digest('hex').slice(0, 16), ...extra };
     if (room) {
       row.mode = room.mode; row.difficulty = room.difficulty;
       row.canJoin = room.mode === 'coop' && !room.match && privacy.allowFriendJoin;
@@ -174,20 +174,22 @@ export class SocialService {
       case 'social.sync': {
         const latest = this.lobby.profiles.read(session.profile.name, session.profile.code);
         this.cacheProfile(keyOf(session), latest); this.snapshot(session);
+        for (const invite of this.lobby.matchmakingService.parties.invites.values()) if (invite.to === keyOf(session)) this.lobby.matchmakingService.parties.emitInvite(session, invite);
         for (const invite of this.invites.values()) if (invite.to === keyOf(session)) this.emitInvite(session, invite);
         return ok;
       }
       case 'social.search': {
         const query = doctorIdentity(msg.identity);
-        if (!query) return fail(N_('请输入代号，不能只输入代码'));
-        const found = query.code ? { identities: [identity], truncated: false } : this.lobby.profiles.searchNames(query.name);
+        if (!query?.code) return fail(N_('请输入代号，不能只输入代码'));
+        const found = { identities: [identity], truncated: false };
         const index = this.activeIndex(), entries = found.identities.map((key) => this.row(key, index, {}, keyOf(session))).filter(Boolean);
         this.emit(session, 'social.search', { query: query.code ? identity : query.name, entries, truncated: found.truncated, entry: query.code ? entries[0] || null : null }); return ok;
       }
       case 'social.avatar': {
         if (!this.related(session, identity)) return fail(N_('不能读取此玩家的头像'));
         const p = this.lookup(identity); if (!p) return fail(N_('未找到该代号#代码'));
-        this.emit(session, 'social.avatar', { identity, avatar: p.avatar || DEFAULT_AVATAR, avatarRevision: this.row(identity, this.activeIndex()).avatarRevision }); return ok;
+        const index = this.activeIndex(), hidden = index.get(identity) && this.lobby.matchmakingService.restricted(index.get(identity).session) && p.avatar?.kind === 'custom';
+        this.emit(session, 'social.avatar', { identity, avatar: hidden ? MATCHING_AVATAR : p.avatar || DEFAULT_AVATAR, avatarRevision: this.row(identity, index).avatarRevision }); return ok;
       }
       case 'social.add':
       case 'social.remove': {
@@ -211,10 +213,10 @@ export class SocialService {
         if (this.playingElsewhere(session, live.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
         if (msg.t === 'social.join') {
           if (live.room.match) return fail(N_('对方已开始模拟，可以观战'), ERR.ROOM_STARTED);
-          return this.capacityResult(this.lobby.join(session, { code: live.room.code }), false);
+          return this.capacityResult(this.lobby.joinRoom(session, live.room), false);
         }
         if (!live.room.match) return fail(N_('对方的模拟已结束'));
-        return this.capacityResult(this.lobby.spectate(session, { code: live.room.code }), true);
+        return this.capacityResult(this.lobby.spectateRoom(session, live.room), true);
       }
       case 'social.invite': return this.invite(session, identity);
       case 'social.inviteRespond': return this.respond(session, msg);
@@ -227,6 +229,7 @@ export class SocialService {
   invite(session, to) {
     const room = this.lobby.roomOf(session), from = keyOf(session), now = this.lobby.now();
     if (!room || room.mode !== 'coop' || room.match || !room.seatOf(session.playerId)) return fail(N_('只能在同盟等待房间邀请玩家'));
+    if (room.matchQueue) return { error: ERR.MATCH_LOCKED };
     if (to === from || !this.related(session, to)) return fail(N_('只能邀请好友或近期玩家'));
     if (this.sessions(to).some((s) => s.roomCode === room.code)) return fail(N_('该玩家已在当前同盟中'), ERR.ALREADY);
     if (!this.sessions(to).length) return fail(N_('对方当前离线'));
@@ -256,7 +259,7 @@ export class SocialService {
     if (!accept) { this.end(invite, 'declined'); return ok; }
     const current = this.lobby.roomOf(session);
     if (current?.match || this.playingElsewhere(session, invite.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
-    const result = this.capacityResult(this.lobby.join(session, { code: invite.room.code }), false);
+    const result = this.capacityResult(this.lobby.joinRoom(session, invite.room), false);
     if (result.error) return result;
     this.end(invite, 'accepted'); return ok;
   }

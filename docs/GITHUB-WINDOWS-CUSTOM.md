@@ -1,12 +1,12 @@
-# Windows v0.2.4 正式定制版源码
+# Windows v0.2.5 定制版源码
 
 此分支保留 `sganggs/Stronghold-Protocol` 官方 v0.2.4（`bc50cac01ff447eff3ab6c35f69d934bbc23b48f`）的提交历史，导入 MimaGlows 于 2026-10-12 正式运行的 Windows 定制版。GPL-3.0-or-later 许可证、原作者署名和第三方声明沿用原项目。
 
 ## 定制功能
 
-伪账号及头像、账号配置和隐私同步、接管审批、服务器统计及对局详情、匿名回放分享、中日配音、好友、标点、无线电、首页与选择页署名；另保留回放分块加载、图形回退、休整快照和邀请处理修复。具体约定见 [Windows 升级说明](WINDOWS-UPGRADE-024.md)、[回放](REPLAYS.md)、[好友](SOCIAL.md) 和 [通讯](COMMUNICATIONS.md)。
+虚拟账号及头像、账号配置和隐私同步、接管审批、服务器统计及对局详情、匿名回放分享、中日配音、好友、标点、无线电、首页与选择页署名；另保留回放分块加载、图形回退、休整快照和邀请处理修复。具体约定见 [Windows 升级说明](WINDOWS-UPGRADE-024.md)、[回放](REPLAYS.md)、[好友](SOCIAL.md) 和 [通讯](COMMUNICATIONS.md)。
 
-此源码对应正式运行版，不包含隔离匹配实验模式。正式实例的 737 个可提交文件在导入时逐项比对 SHA-256，全部一致；测试及开发配置取自该正式版升级时使用的源码目录。
+本版在现有定制源码上三方整合官方 v0.2.5、回放扫描 Worker 修复及匹配实验功能。新增房间盟约声明、分享撤销、匹配隐私和好友精确搜索。规则见[MATCHMAKING.md](MATCHMAKING.md)，上游与升级说明见[UPGRADE-025.md](UPGRADE-025.md)。
 
 ## 在 Windows 上运行
 

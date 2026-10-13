@@ -1,0 +1,50 @@
+import fs from 'node:fs';
+const rows = [
+  ['匹配开局后放弃将禁用匹配30分钟、1小时、3小时或24小时；掉线可在10分钟内重连。','Abandoning a matched game suspends matchmaking for 30 minutes, 1 hour, 3 hours or 24 hours. Reconnect within 10 minutes after disconnecting.','マッチ開始後の放棄で30分、1時間、3時間または24時間参加停止。切断後10分以内に再接続できます。','매칭 시작 후 포기하면 30분, 1시간, 3시간 또는 24시간 제한됩니다. 연결이 끊기면 10분 내에 재접속할 수 있습니다.','配對開局後放棄將停用配對30分鐘、1小時、3小時或24小時；斷線可在10分鐘內重連。'],
+  ['实验匹配版','Experimental matchmaking','実験マッチング版','실험 매칭 버전','實驗配對版'],
+  ['开始匹配','Start matchmaking','マッチング開始','매칭 시작','開始配對'],
+  ['匹配期间只能使用默认或干员头像','Use default or operator avatars during matchmaking','マッチング中はデフォルトまたはオペレーターのアイコンのみ使用可能','매칭 중에는 기본 또는 오퍼레이터 아바타만 사용할 수 있습니다','配對期間只能使用預設或幹員頭像'],
+  ['匹配禁用剩余 {minutes} 分钟','Matchmaking suspended for {minutes} more minutes','マッチング停止：残り{minutes}分','매칭 이용 제한: {minutes}분 남음','配對停用剩餘 {minutes} 分鐘'],
+  ['匹配黑名单','Matchmaking blacklist','マッチングブロックリスト','매칭 차단 목록','配對黑名單'],
+  ['任一方拉黑后，双方无法进入同一匹配对局。','If either player blocks the other, they cannot share a match.','どちらかがブロックすると同じマッチに参加できません。','한쪽이 차단하면 같은 매칭 경기에 참가할 수 없습니다.','任一方封鎖後，雙方無法進入同一配對對局。'],
+  ['解除拉黑','Unblock','ブロック解除','차단 해제','解除封鎖'],
+  ['暂无匹配黑名单','No blocked players','ブロックしたプレイヤーはいません','차단한 플레이어가 없습니다','暫無配對黑名單'],
+  ['匹配模式','Matchmaking mode','マッチングモード','매칭 모드','配對模式'],
+  ['单人排队或邀请好友组队，最多4人合作。','Queue alone or invite friends for up to 4-player co-op.','一人で参加、またはフレンドを招待。最大4人で協力。','혼자 대기하거나 친구를 초대해 최대 4명이 협력합니다.','單人排隊或邀請好友組隊，最多4人合作。'],
+  ['创建匹配房间','Create matchmaking room','マッチングルーム作成','매칭 방 만들기','建立配對房間'],
+  ['使用当前选择的难度。开局后放弃将暂时禁用匹配。','Uses the selected difficulty. Leaving a started match suspends matchmaking.','選択中の難易度を使用。開始後の放棄でマッチングが一時停止されます。','선택한 난이도를 사용합니다. 시작 후 포기하면 매칭이 일시 제한됩니다.','使用目前選擇的難度。開局後放棄將暫時停用配對。'],
+  ['匹配设置','Matchmaking settings','マッチング設定','매칭 설정','配對設定'],
+  ['允许匹配玩家加入','Allow matchmaking players to join','マッチング参加者を受け入れる','매칭 플레이어 참가 허용','允許配對玩家加入'],
+  ['我的阵营偏好','My faction preference','希望する陣営','선호 진영','我的陣營偏好'],
+  ['不限','Any','指定なし','상관없음','不限'],
+  ['偏好阵营至少60%概率可用；匹配期间上传头像暂时替换为默认头像。','Your preferred faction has at least a 60% availability chance. Uploaded avatars temporarily use the default.','希望陣営は60%以上の確率で使用可能。アップロード画像は一時的にデフォルトに置き換わります。','선호 진영이 최소 60% 확률로 활성화됩니다. 업로드 아바타는 임시로 기본 아바타로 표시됩니다.','偏好陣營至少60%機率可用；配對期間上傳頭像暫時替換為預設頭像。'],
+  ['匹配未满员，等待房主选择','Room not full. Waiting for the host.','人数不足：ホストの選択を待っています','인원 부족: 방장의 선택을 기다립니다','配對未滿員，等待房主選擇'],
+  ['正在匹配，剩余 {seconds} 秒','Matching: {seconds} seconds left','マッチング中：残り{seconds}秒','매칭 중: {seconds}초 남음','正在配對，剩餘 {seconds} 秒'],
+  ['取消匹配','Cancel matchmaking','マッチングをキャンセル','매칭 취소','取消配對'],
+  ['匹配未满员','Room not full','人数が不足しています','인원이 부족합니다','配對未滿員'],
+  ['现有人数开局','Start with current players','現在の人数で開始','현재 인원으로 시작','以目前人數開局'],
+  ['继续等待60秒','Wait another 60 seconds','さらに60秒待つ','60초 더 기다리기','繼續等待60秒'],
+  ['AI补满4人','Fill to 4 with AI','AIで4人に補充','AI로 4명 채우기','以AI補滿4人'],
+  ['当前有 {count} 位博士。请选择接下来的行动。','There are {count} Doctors. Choose the next action.','現在{count}人のドクターがいます。次の行動を選んでください。','현재 박사 {count}명이 있습니다. 다음 행동을 선택하세요.','目前有 {count} 位博士。請選擇接下來的行動。'],
+  ['每次选择都会重新抽取本局开局信息。','Each choice redraws this match opening.','選択のたびに開始情報が再抽選されます。','선택할 때마다 경기 시작 정보가 다시 추첨됩니다.','每次選擇都會重新抽取本局開局資訊。'],
+  ['匹配队友','Matched teammates','マッチングした仲間','매칭 팀원','配對隊友'],
+  ['已拉黑','Blocked','ブロック済み','차단됨','已封鎖'],
+  ['拉黑匹配队友','Block teammate','仲間をブロック','팀원 차단','封鎖配對隊友'],
+  ['匹配需要完整的博士代号和代码','Matchmaking requires a complete Doctor callsign and code','マッチングにはドクターのコードネームとコードが必要です','매칭에는 완전한 박사 코드명과 코드가 필요합니다','配對需要完整的博士代號和代碼'],
+  ['博士代号未通过敏感词检查，请修改后再匹配','Your callsign failed the word filter. Change it before matching.','コードネームが禁止語チェックに通りませんでした。変更してください','코드명이 금칙어 검사에 통과하지 못했습니다. 변경 후 매칭하세요','博士代號未通過敏感詞檢查，請修改後再配對'],
+  ['当前账号处于匹配禁用期，请等待倒计时结束','Matchmaking is suspended for this account. Wait for the countdown.','このアカウントのマッチングは停止中です。期限までお待ちください','이 계정은 매칭 이용 제한 중입니다. 남은 시간을 기다려 주세요','目前帳號處於配對停用期，請等待倒數結束'],
+  ['该难度不支持此阵营偏好','This difficulty does not support that faction preference','この難易度ではその陣営を指定できません','이 난이도에서는 해당 진영을 선호로 선택할 수 없습니다','該難度不支援此陣營偏好'],
+  ['队伍中存在匹配黑名单关系，无法一起匹配','A blacklist relationship prevents this party from matching together','チーム内にブロック関係があるため参加できません','팀 내 차단 관계가 있어 함께 매칭할 수 없습니다','隊伍中存在配對黑名單關係，無法一起配對'],
+  ['匹配中无法修改，请先取消匹配','Cancel matchmaking before changing this setting','変更する前にマッチングをキャンセルしてください','설정 변경 전에 매칭을 취소해 주세요','配對中無法修改，請先取消配對'],
+  ['匹配状态已改变，请使用最新操作窗口','Matchmaking changed. Use the latest dialog.','状態が変わりました。最新の画面で操作してください','매칭 상태가 변경되었습니다. 최신 창에서 조작해 주세요','配對狀態已改變，請使用最新操作視窗'],
+  ['请先移除AI队友，再开始匹配','Remove AI teammates before matchmaking','AIの仲間を外してからマッチングしてください','AI 팀원을 제거한 후 매칭을 시작하세요','請先移除AI隊友，再開始配對'],
+  ['只能拉黑已结束匹配对局中的真人队友','Only human teammates from completed matched games can be blocked','終了したマッチの人間の仲間のみブロックできます','종료된 매칭 경기의 실제 팀원만 차단할 수 있습니다','只能封鎖已結束配對對局中的真人隊友'],
+  ['匹配黑名单已满20人，请先解除一个拉黑','Blacklist full (20 players). Unblock someone first.','ブロックは20人までです。先に解除してください','차단 목록이 20명으로 가득 찼습니다. 먼저 차단을 해제하세요','配對黑名單已滿20人，請先解除一個封鎖'],
+  ['切换难度后，原阵营偏好不可用，已清空','Your faction preference was cleared because the new difficulty disables it.','新しい難易度では希望陣営が使えないため、指定を解除しました','변경한 난이도에서 선호 진영을 사용할 수 없어 초기화했습니다','切換難度後，原陣營偏好不可用，已清空'],
+];
+for (const [i, code] of ['en', 'ja', 'ko', 'zh-TW'].entries()) {
+  const file = `public/i18n/${code}.json`, pack = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const row of rows) pack[row[0]] = row[i + 1];
+  fs.writeFileSync(file, JSON.stringify(pack, null, 2) + '\n');
+}
+console.log(`Added ${rows.length} translations to all four packs`);

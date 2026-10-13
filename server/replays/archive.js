@@ -11,9 +11,12 @@ import { simulationVersion, playbackCompatibility } from './compatibility.js';
 import { readTrackIndex, buildTrackIndex, readTrackChunk, trackDirectory } from './tracks.js';
 const ID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 export class ReplayArchive {
-  constructor(dir, log = console, { now = Date.now, version = replayVersion(), maxBytes = 100_000_000, ttlMs = Infinity } = {}) {
+  constructor(dir, log = console, { now = Date.now, version = replayVersion(), maxBytes = 100_000_000, ttlMs = Infinity,
+    scanWorkerFactory = () => new Worker(new URL('./scan-worker.mjs', import.meta.url), { execArgv: [] }) } = {}) {
     this.simulationVersion = simulationVersion();
     this.now = now; this.version = version; this.maxBytes = maxBytes; this.ttlMs = ttlMs; this.dir = dir; this.log = log; this.shares = new Map(); this.revoked = new Set(); this.pending = new Map(); this.queue = []; this.worker = null; this.stopped = false;
+    this.scanWorkerFactory = scanWorkerFactory; this.scanWorker = null; this.scanPromise = null;
+    this.scanRevisions = new Map(); this.scanFailure = null;
     // Pending inputs are persisted as well: a process restart can resume a worker that did not finish.
     if (fs.existsSync(dir)) for (const name of fs.readdirSync(dir).filter((n) => n.endsWith('.inputs.gz'))) {
       try {
@@ -30,7 +33,8 @@ export class ReplayArchive {
         else if (record.status !== 'incompatible') fs.unlinkSync(path.join(dir, name));
       } catch (e) { this.log.error('[replay] recovery failed', e); }
     }
-    this.sweep(); this.sweepTimer = setInterval(() => this.sweep(), 60_000); this.sweepTimer.unref();
+    this.ready = this.sweep(); this.ready.catch(() => {});
+    this.sweepTimer = setInterval(() => { void this.sweep().catch(() => {}); }, 60_000); this.sweepTimer.unref();
     this.runNext();
   }
   create(match) { return new MatchRecorder(match, this); }
@@ -40,7 +44,7 @@ export class ReplayArchive {
     if (buffer.length > this.maxBytes) throw new Error('replay-size-limit');
     fs.mkdirSync(this.dir, { recursive: true });
     const temp = target + '.tmp';
-    try { fs.writeFileSync(temp, buffer); fs.renameSync(temp, target); }
+    try { fs.writeFileSync(temp, buffer); fs.renameSync(temp, target); this.scanRevisions.set(path.basename(target), (this.scanRevisions.get(path.basename(target)) || 0) + 1); }
     catch (e) { try { fs.rmSync(temp, { force: true }); } catch { /* preserve the original storage error */ } throw e; }
   }
   writeJson(target, obj) { this.writeBuffer(target, gzipSync(JSON.stringify(obj), { level: 9 })); }
@@ -136,18 +140,68 @@ export class ReplayArchive {
     return summary;
   }
   sweep() {
-    if (!fs.existsSync(this.dir)) return;
-    const report={checkedAt:this.now(),build:this.version,simulationVersion:this.simulationVersion,counts:{},entries:[]};
-    for (const file of fs.readdirSync(this.dir).filter((f) => f.endsWith('.json.gz'))) {
-      try { const r = JSON.parse(gunzipSync(fs.readFileSync(path.join(this.dir, file)))); if (this.expired(r)) this.expire(r); else if (!r.shareCode) this.write(r); else this.assignShare(r);
-        const reason=['ready','partial'].includes(r.status)?playbackCompatibility(r):r.status==='processing'&&!this.generationCompatible(r)?'generation-code':r.expiryReason||r.incompatibilityReason||null;
-        const status=reason&&['ready','partial','processing'].includes(r.status)?'incompatible':r.status;
-        report.counts[status]=(report.counts[status]||0)+1;report.entries.push({id:r.id,status,reason});
-      }
-      catch (e) { this.log.error('[replay] sweep failed', e); }
-    }
-    this.compatibilityReport=report;
-    try { this.writeJson(path.join(this.dir,'compatibility-report.gz'),report); } catch(e) { this.log.error('[replay] compatibility report failed',e); }
+    if (this.stopped) return Promise.resolve();
+    if (this.scanPromise) return this.scanPromise;
+    const revisions = new Map(this.scanRevisions), checkedAt = this.now();
+    const promise = new Promise((resolve, reject) => {
+      let worker, timer;
+      const clean = () => { clearTimeout(timer); worker?.removeListener('message', receive); worker?.removeListener('error', fail); worker?.removeListener('exit', exited); this.scanFailure = null; };
+      const fail = (error) => {
+        clean(); if (this.scanWorker === worker) this.scanWorker = null;
+        void worker?.terminate();
+        if (!this.stopped) this.log.error('[replay] scan failed', error);
+        reject(error);
+      };
+      const exited = () => fail(new Error('replay-scan-worker-exited'));
+      const receive = (result) => {
+        if (result.error) { fail(new Error(result.error)); return; }
+        try {
+          if (this.stopped) { clean(); resolve(undefined); return; }
+          const report = { checkedAt, build: this.version, simulationVersion: this.simulationVersion, counts: {}, entries: [],
+            scan: { durationMs: result.durationMs, inspected: result.inspected, cacheHits: result.cacheHits, errors: result.errors.length, logicVersion: result.logicVersion } };
+          const accepted = new Set();
+          for (const entry of result.entries) {
+            if ((revisions.get(entry.file) || 0) !== (this.scanRevisions.get(entry.file) || 0)) continue;
+            let stat; try { stat = fs.statSync(path.join(this.dir, entry.file)); } catch { continue; }
+            if (stat.size !== entry.fingerprint.size || stat.mtimeMs !== entry.fingerprint.mtimeMs || stat.ctimeMs !== entry.fingerprint.ctimeMs) continue;
+            if (this.shares.has(entry.shareCode) && this.shares.get(entry.shareCode) !== entry.id) continue;
+            if (entry.expiryRecord) this.expire(entry.expiryRecord);
+            else if (entry.replacement) this.writeBuffer(path.join(this.dir, entry.file), entry.replacement);
+            for (const [code, id] of this.shares) if (id === entry.id && code !== entry.shareCode) this.shares.delete(code);
+            this.shares.set(entry.shareCode, entry.id); accepted.add(entry.id);
+            const status = entry.reason && ['ready', 'partial', 'processing'].includes(entry.status) ? 'incompatible' : entry.status;
+            report.counts[status] = (report.counts[status] || 0) + 1; report.entries.push({ id: entry.id, status, reason: entry.reason });
+          }
+          for (const [code, id] of this.shares) if (!accepted.has(id) && !this.pending.has(id) && !fs.existsSync(this.file(id))) this.shares.delete(code);
+          for (const error of result.errors) this.log.error('[replay] scan file failed', error.file, error.message);
+          this.writeJson(path.join(this.dir, 'compatibility-report.gz'), report);
+          this.compatibilityReport = report;
+          this.log.info?.('[replay] scan', JSON.stringify(report.scan));
+          clean(); resolve(report);
+        } catch (error) { fail(error); }
+      };
+      try {
+        if (!this.scanWorker) {
+          this.scanWorker = this.scanWorkerFactory();
+          const created = this.scanWorker;
+          created.on('error', () => {}); // The active request logs failures; idle exits are retried.
+          created.once('exit', () => { if (this.scanWorker === created) this.scanWorker = null; });
+        }
+        worker = this.scanWorker;
+        worker.once('message', receive); worker.once('error', fail); worker.once('exit', exited);
+        this.scanFailure = fail;
+        timer = setTimeout(() => fail(new Error('replay-scan-timeout')), 120_000); timer.unref();
+        worker.postMessage({ dir: this.dir, now: checkedAt, version: this.version, simulationVersion: this.simulationVersion, ttlMs: this.ttlMs });
+      } catch (error) { fail(error); }
+    });
+    this.scanPromise = promise;
+    void promise.finally(() => { if (this.scanPromise === promise) this.scanPromise = null; }).catch(() => {});
+    return promise;
   }
-  close() { clearInterval(this.sweepTimer); this.stopped = true; return this.worker?.terminate() || Promise.resolve(); }
+  async close() {
+    clearInterval(this.sweepTimer); this.stopped = true;
+    const scanWorker = this.scanWorker;
+    this.scanFailure?.(new Error('replay-scan-closed'));
+    await Promise.all([this.worker?.terminate(), scanWorker?.terminate()]); this.scanWorker = null;
+  }
 }

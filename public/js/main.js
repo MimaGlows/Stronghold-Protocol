@@ -31,6 +31,7 @@
 import './ui/compat.js';
 import { installCommunications } from './ui/communications.js';
 import { installSocial, FriendsDrawer, SocialInviteHost, requestInvitePermissionOnGesture } from './ui/social.js';
+import { doctorProfileKey } from '../../shared/doctor.js';
 import { clearProfileView } from './ui/profileView.js';
 import { render } from '../vendor/preact.module.js';
 import { useErrorBoundary } from '../vendor/hooks.module.js';
@@ -45,7 +46,7 @@ import { TitleScreen, sanitizeDoctorName } from './screens/title.js';
 import { LobbyScreen, rememberRoom, parseRoomParam } from './screens/lobby.js';
 import { RoomScreen } from './screens/room.js';
 import { GameScreen } from './screens/game.js';
-import { installAudio } from './audio.js';
+import { audio, installAudio } from './audio.js';
 import { settingsStore } from './ui/settings.js';
 import { GuideHost } from './ui/guide.js';
 import { installDeviceSupport } from './ui/device.js';
@@ -57,6 +58,8 @@ import { t, N_, translateWire } from '../../shared/i18n.js';
 import { AvatarHost } from './ui/avatarPicker.js';
 import { installProfileTransfer, ProfileTransferHost } from './ui/profileTransfer.js';
 import { installAvatarSync, avatarStore } from './ui/avatarProfile.js';
+import { notifyMatchingAvatar, showMatchingAdmissionError } from './ui/matchingFeedback.js';
+import { installMatchingPresentation, MatchingSuccessHost } from './ui/matchingPresentation.js';
 import { checkAvatarChoice, DEFAULT_AVATAR } from '../../shared/avatar.js';
 
 import { HistoryHost } from './replay/host.js';
@@ -203,7 +206,7 @@ function onRoomState(msg) {
   // A (new) match starts: forget the previous match's state so stale results never show.
   if (room.inMatch && !(prevRoom && prevRoom.inMatch && prevRoom.code === room.code)) store.set({ match: emptyMatch() });
   store.set({ room });
-  if (room.mode === 'coop' && typeof room.code === 'string') rememberRoom(room.code);
+  if (room.mode === 'coop' && !room.matching?.generated && typeof room.code === 'string') rememberRoom(room.code);
   maybeFinishRestore();
 }
 
@@ -214,6 +217,12 @@ const CLOSE_REASON = {
 };
 
 function wireNet() {
+  net.on('profileChanging', () => { notifyMatchingAvatar(null,false,null); store.set({ matching: { identity: null, blocks: [], bannedUntil: 0, preference: null, party: null, restricted: false, offset: 0 } }); });
+  net.on('matching.state', (msg) => {
+    if (msg.identity !== doctorProfileKey(net.name)) return;
+    store.set({ matching: { identity: msg.identity, blocks: msg.blocks || [], bannedUntil: msg.bannedUntil || 0, preference: msg.preference || null, party: msg.party || null, restricted: !!msg.restricted, offset: msg.serverNow - Date.now() } });
+    notifyMatchingAvatar(msg.identity,!!msg.restricted,avatarStore.get().avatar);
+  });
   net.on('status', (snap) => {
     const cur = store.get().connection;
     store.set({
@@ -232,13 +241,19 @@ function wireNet() {
   net.on('replaced', () => toast(t('该身份已在其他页面登录，本页已断开'), 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
   net.on('room.state', onRoomState);
+  net.on('matching.returned', backToLobby);
   net.on('room.closed', (msg) => {
     backToLobby();
+    if (msg.reason === 'matching-name') { showMatchingAdmissionError({ code: 'MATCH_NAME' }); return; }
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');
   });
   net.on('m.public', (msg) => { matchAt = Date.now(); rememberMatch(msg, store.get().me.playerId); store.patch('match', { public: payload(msg) }); maybeFinishRestore(); });
   net.on('m.private', (msg) => { matchAt = Date.now(); store.patch('match', { private: payload(msg) }); });
+  net.on('m.layer', (msg) => {
+    const s = store.get();
+    if (selectRoute(s) === 'game' && msg.playerId === s.me?.playerId) audio.layerGain(msg.bondId, msg.add);
+  });
   net.on('m.field', (msg) => store.patch('match', { field: payload(msg) }));
   net.on('m.result', (msg) => {
     rememberMatch(msg, store.get().me.playerId);
@@ -317,6 +332,7 @@ function App() {
     <${HistoryHost} />
     <${FriendsDrawer} visible=${route === 'lobby' || (route === 'room' && store.get().room?.mode === 'coop')} />
     <${SocialInviteHost} />
+    <${MatchingSuccessHost} />
     <${ProfileTransferHost} />
     <${StatsHost} />
   </div>`;
@@ -384,6 +400,7 @@ async function boot() {
   net.attachBrowserHooks();
   // Audio: unlock on first gesture, BGM follows the route / match phase (js/audio.js).
   installAudio({ getManifest: () => data.get('assets'), subscribe: store.subscribe, getState: store.get, selectRoute, settings: settingsStore.get() });
+  installMatchingPresentation();
   data.load('assets').catch(() => {});
   // Warm the data cache in the background (missing files are tolerated).
   data.loadAll('config').catch(() => {});

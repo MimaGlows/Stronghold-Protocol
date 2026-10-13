@@ -14,6 +14,8 @@
 *.html text eol=lf
 *.json text eol=lf
 *.md   text eol=lf
+server/matchmaking/sensitive-words.txt text eol=lf
+server/matchmaking/sensitive-abuse.txt text eol=lf
 *.yml  text eol=lf
 # binary assets
 *.png binary

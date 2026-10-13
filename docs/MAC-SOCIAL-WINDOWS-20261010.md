@@ -1,6 +1,6 @@
 # Mac 好友通讯重新合并到 Windows v0.2.2
 
-2026-10-10，以已校验的 `Stronghold-Protocol-Windows-Social-Communications-20261009.zip` 为社交和通讯实现依据，保留 Windows v0.2.2 游戏规则、伪账号统计及最近 30 条记录的回放资格。没有导入 Mac 或验收账号数据。
+2026-10-10，以已校验的 `Stronghold-Protocol-Windows-Social-Communications-20261009.zip` 为社交和通讯实现依据，保留 Windows v0.2.2 游戏规则、虚拟账号统计及最近 30 条记录的回放资格。没有导入 Mac 或验收账号数据。
 
 ## 操作与协议
 

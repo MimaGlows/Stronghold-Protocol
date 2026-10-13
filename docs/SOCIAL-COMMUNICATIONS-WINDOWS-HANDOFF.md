@@ -32,7 +32,7 @@
 
 `/api/social-history` 使用当前会话 Bearer token，仅查询已授权目标的正常结算；每页最多 50 条且紧凑行约 40 KiB，含 revision/offset/next。详情和回放保持现有播放器，不再建立独立记录列表。401/403/404 分别处理，撤销权限清空已加载资料，账号切换忽略旧响应。HTTP 头继续 80 KiB。
 
-档案新字段：friends、socialRecentMatches、socialVersion，以及 preferences.socialPrivacy；沿用原子保存。邀请、在线状态和订阅只在进程内。正式数据在 `logs/replays/profiles` 与 `logs/replays`；验证数据仅位于隔离目录 qa-data，不进入正式实例。伪账号没有新增密码体系。
+档案新字段：friends、socialRecentMatches、socialVersion，以及 preferences.socialPrivacy；沿用原子保存。邀请、在线状态和订阅只在进程内。正式数据在 `logs/replays/profiles` 与 `logs/replays`；验证数据仅位于隔离目录 qa-data，不进入正式实例。虚拟账号没有新增密码体系。
 
 回放新增独立 communications 轨道，仅保存服务端接受的展示事件与对局时钟，不混入恢复操作或复制战斗快照。gzip 存储、默认完整存档 100 MB 上限保留；旧回放缺轨道按空列表处理，摘要省略、过期清空。8400 条通讯轨道压缩小于 2 MB 的测试仅验证轨道容量，并不承诺完整对局必然小于 100 MB。
 
@@ -46,7 +46,7 @@
 
 测试地址 http://127.0.0.1:3002；日志及截图在 `.updates/social-communications-20261009/`。正式双击启动、项目内 Windows Node 24.19.0、127.0.0.1:3000、SP_COMBAT=client、SP_VERIFY=off、SakuraFRP 和两行署名保留。开发依赖仅在隔离源码目录，正式实例不执行 npm 安装。
 
-切换前完整备份当前实例、启动入口和说明，重新读取最新正式档案；运行中对局需要确认维护窗口再停止对应游戏进程。只复制源码变更，不覆盖正式数据为测试数据，不复制 Mac runtime、隔离 node_modules 或素材联接。启动和关键检查失败时停新服，恢复完整备份并重启旧入口；保留失败版本供排查。后续升级需继续合并社交权限、通讯轨道、快捷键迁移及既有伪账号统计／头像／配音／接管／署名定制。
+切换前完整备份当前实例、启动入口和说明，重新读取最新正式档案；运行中对局需要确认维护窗口再停止对应游戏进程。只复制源码变更，不覆盖正式数据为测试数据，不复制 Mac runtime、隔离 node_modules 或素材联接。启动和关键检查失败时停新服，恢复完整备份并重启旧入口；保留失败版本供排查。后续升级需继续合并社交权限、通讯轨道、快捷键迁移及既有虚拟账号统计／头像／配音／接管／署名定制。
 
 ## 本次正式部署结果
 

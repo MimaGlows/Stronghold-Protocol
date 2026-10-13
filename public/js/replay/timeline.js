@@ -53,5 +53,5 @@ export function fmtTime(ms) { const seconds = Math.max(0, Math.floor(ms / 1000))
 export function expiryHint(record, _now) {
   if (record.status === 'expired') return record.expiryReason === 'version' ? t('该回放已因版本更新过期') : record.expiryReason === 'size-limit' ? t('回放超过储存上限，结算记录已保留') : t('该回放已过期，统计记录仍保留');
   if (record.status === 'incompatible') return t('回放格式或生成引擎不兼容，原始轨道已保留');
-  return t('仅保留伪账号最近30条对局记录中的回放，兼容的更新不会使其过期');
+  return t('仅保留虚拟账号最近30条对局记录中的回放，兼容的更新不会使其过期');
 }

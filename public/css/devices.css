@@ -162,10 +162,10 @@ html:not(.sp-in-match) .toast-host { margin-top: var(--sa-t); }
 .sp-coarse .title-conn .fsbtn .icon { width: max(.26rem, 18px); height: max(.26rem, 18px); }
 .sp-coarse .set-voice .set-seg button,
 .sp-coarse .set-voice__choices button { min-height: var(--tap-min); min-width: var(--tap-min); }
-.sp-coarse .set-voice .set-row__label { font-size: max(.18rem, 12px); }
-.sp-coarse .set-voice :is(.set-seg button, .set-voice__choices button) { font-size: max(.13rem, 12px); }
-.sp-coarse .set-voice :is(.set-voice__search, .set-voice__name, h3) { font-size: max(.15rem, 12px); }
-.sp-coarse .set-voice :is(.set-hint, .set-voice__name small) { font-size: max(.12rem, 11px); }
+.sp-coarse .set-voice .set-row__label { font-size: max(calc(.18 * var(--t)), 12px); }
+.sp-coarse .set-voice :is(.set-seg button, .set-voice__choices button) { font-size: max(calc(.13 * var(--t)), 12px); }
+.sp-coarse .set-voice :is(.set-voice__search, .set-voice__name, h3) { font-size: max(calc(.15 * var(--t)), 12px); }
+.sp-coarse .set-voice :is(.set-hint, .set-voice__name small) { font-size: max(calc(.12 * var(--t)), 11px); }
 
 .rotate-hint__pwa { pointer-events: auto; margin-top: 6px; }
 .rotate-hint__pwa[hidden] { display: none; }

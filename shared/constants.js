@@ -5,7 +5,7 @@ import { N_ } from './i18n.js';
 export const PROTOCOL_VERSION = 1;
 /** Release version shown to players (title screen, server banner, /healthz). Kept equal to package.json "version"
  * (test/version.test.js); PROTOCOL_VERSION above is the separate wire-format number. */
-export const APP_VERSION = '0.2.4';
+export const APP_VERSION = '0.2.5';
 /** A development build (the public `dev` branch): the title screen, the boot banner and the README say so, and
  * tools/package.mjs refuses to build a release zip from it without --allow-dev. */
 export const DEV_BUILD = /-dev$/.test(APP_VERSION);
@@ -126,6 +126,9 @@ export const UF = Object.freeze({
 export const ANIM = Object.freeze({ IDLE: 0, MOVE: 1, ATTACK: 2, SKILL: 3, DIE: 4, STUN: 5, DEPLOY: 6 });
 
 export const ERR = Object.freeze({
+  MATCH_ACCOUNT: 'MATCH_ACCOUNT', MATCH_NAME: 'MATCH_NAME', MATCH_BANNED: 'MATCH_BANNED',
+  MATCH_PREFERENCE: 'MATCH_PREFERENCE', MATCH_BLOCKED: 'MATCH_BLOCKED', MATCH_LOCKED: 'MATCH_LOCKED',
+  MATCH_STALE: 'MATCH_STALE', MATCH_BOTS: 'MATCH_BOTS', MATCH_BAD_TEAMMATE: 'MATCH_BAD_TEAMMATE', MATCH_BLOCK_FULL: 'MATCH_BLOCK_FULL',
   BAD_MSG: 'BAD_MSG',             // malformed / unknown message
   SESSION_IN_USE: 'SESSION_IN_USE', // a local recovery candidate cannot replace the connected holder
   RATE: 'RATE',                   // rate limited
@@ -156,6 +159,11 @@ export const ERR = Object.freeze({
 });
 
 export const ERR_TEXT = {
+  MATCH_ACCOUNT: N_('匹配需要完整的博士代号和代码'), MATCH_NAME: N_('博士代号未通过敏感词检查，请修改后再匹配'),
+  MATCH_BANNED: N_('当前账号处于匹配禁用期，请等待倒计时结束'), MATCH_PREFERENCE: N_('该难度不支持此阵营偏好'),
+  MATCH_BLOCKED: N_('队伍中存在匹配黑名单关系，无法一起匹配'), MATCH_LOCKED: N_('匹配中无法修改，请先取消匹配'),
+  MATCH_STALE: N_('匹配状态已改变，请使用最新操作窗口'), MATCH_BOTS: N_('请先移除AI队友，再开始匹配'),
+  MATCH_BAD_TEAMMATE: N_('只能拉黑已结束匹配对局中的真人队友'), MATCH_BLOCK_FULL: N_('匹配黑名单已满20人，请先解除一个拉黑'),
   SESSION_IN_USE: N_('此对局仍在其他窗口中，或当前浏览器无法安全恢复。请关闭原窗口后重试。'),
   BAD_MSG: N_('无效的请求'), RATE: N_('操作过于频繁'), NOT_IN_ROOM: N_('你不在房间中'), ROOM_NOT_FOUND: N_('未找到该同盟密钥对应的房间'),
   ROOM_FULL: N_('房间已满'), ROOM_STARTED: N_('模拟已开始'), NOT_HOST: N_('只有房主可以操作'), NOT_READY: N_('仍有玩家未就绪'),

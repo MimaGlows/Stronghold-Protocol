@@ -10,6 +10,7 @@ import { OK, fail } from './common.js';
 
 export class MatchSetupVote {
   requestSetupReroll(playerId, revision) {
+    if (this.matchingPreferences) return fail(ERR.MATCH_LOCKED);
     if (this.disposed || this.ended || this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE);
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left || !ps.connected) return fail(ERR.NOT_IN_ROOM);

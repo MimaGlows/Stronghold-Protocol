@@ -1,6 +1,7 @@
 // Player portraits travel only with identity/room messages, never combat snapshots.
 /** @typedef {{ kind: 'default' } | { kind: 'operator', charId: string, e2: boolean } | { kind: 'custom', dataUrl: string }} AvatarChoice */
 export const DEFAULT_AVATAR = Object.freeze({ kind: 'default' });
+export const MATCHING_AVATAR = Object.freeze({ kind: 'operator', charId: 'char_446_aroma', e2: true });
 export const AVATAR_SIZE = 256;
 export const AVATAR_MAX_BYTES = 24 * 1024;
 export const AVATAR_INPUT_MAX_BYTES = 5 * 1024 * 1024;

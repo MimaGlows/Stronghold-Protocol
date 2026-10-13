@@ -3,7 +3,7 @@ import { PHASE } from './constants.js';
 
 /** Current record-envelope version (bump + add a MIGRATIONS step when the record shape changes). */
 export const STATS_VERSION = 1;
-/** localStorage key under the app's `sp.pref.` prefix (store.js loadPref). */
+/** localStorage key under the app's `sp.matchmaking.pref.` prefix (store.js loadPref). */
 export const STATS_PREF_KEY = 'stats';
 /** Oldest records are dropped beyond this many matches. */
 export const MAX_RECORDS = 1000;
@@ -142,11 +142,13 @@ export function normalizeRecord(raw) {
   const quit = r.end === 'quit';
   const players = r.players.filter(isObj).slice(0, MAX_PLAYERS).map((p) => normalizePlayerRow(p, quit));
   if (!players.length) return null;
+  /** @type {any} */
   const rec = {
     id: str(r.id),
     v: STATS_VERSION,
     t: int(r.t, 0),
     end: quit ? 'quit' : 'settled',
+    ...(r.isMatchingMatch ? { isMatchingMatch: true } : {}),
     victory: bool(r.victory),
     roundsPassed: quit ? num(r.roundsPassed) : int(r.roundsPassed, 0),
     lastRound: num(r.lastRound),
@@ -220,7 +222,7 @@ export function migrateStats(raw) {
 // ---- compaction + the storage budget ---------------------------------------------------------------------------
 
 const COMPACT_FRAME = ['id', 'v', 't', 'end', 'victory', 'roundsPassed', 'lastRound', 'hiddenReached', 'hiddenCleared', 'reason', 'modeId',
-  'difficulty', 'roomMode', 'durationMs', 'selfId'];
+  'difficulty', 'roomMode', 'durationMs', 'selfId', 'isMatchingMatch'];
 
 /**
  * The compact form of a record: the frame and the player's OWN row without lineup, bonds and name — everything the

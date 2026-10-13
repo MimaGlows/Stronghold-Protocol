@@ -20,6 +20,6 @@ export function OperatorVoice({ charId }) {
     <span class="lo-select"><select aria-label=${t('此干员语音')} value=${value} onChange=${(e) => change(e.currentTarget.value)}>
       <option value="">${t('跟随全局')}</option><option value="cn">${VOICE_LANG_NAMES.cn}</option><option value="jp">${VOICE_LANG_NAMES.jp}</option>
     </select></span>
-    <small>${t('语音设置随当前伪账号保存；缺失的语音会回退到另一种语言。')}</small>
+    <small>${t('语音设置随当前虚拟账号保存；缺失的语音会回退到另一种语言。')}</small>
   </label>`;
 }

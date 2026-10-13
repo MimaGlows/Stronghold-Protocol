@@ -12,6 +12,8 @@
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
+import { showMatchingAdmissionError } from '../ui/matchingFeedback.js';
+import { MatchingBackfillToggle, RoomAllianceButton } from '../ui/matchmaking.js';
 import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MAX_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
 import {
   html, Button, Icon, MicroLabel, PingPill, DifficultyTag, DifficultyIcon, Tooltip, confirmDialog, doctorNo,
@@ -27,6 +29,7 @@ import { LoadoutButton } from './loadout.js';
 import { net } from '../net.js';
 import { store, useStore, shallowEqual, emptyMatch, isSpectating } from '../store.js';
 import { difficultyInfo } from './lobby.js';
+import { data, useData } from '../data.js';
 import { t, tc } from '../../../shared/i18n.js';
 
 /**
@@ -59,13 +62,13 @@ export function roomFacts(room, myId) {
   const others = humans.filter((s) => s.playerId !== myId);
   // The host never readies: starting the match is the host's ready (server rule), so the count
   // treats the host as ready — "已就绪 0/1" next to "准许进入模拟" would contradict itself.
-  const isReady = (s) => !!s.ready || s.playerId === room?.hostId;
+  const isReady = (s) => !!s.ready || (!room?.matching?.enabled && s.playerId === room?.hostId);
   const readyHumans = humans.filter(isReady).length;
   const othersReady = others.every((s) => s.ready && s.connected !== false);
   return {
     seats, occupied, humans, mine, isHost, readyHumans, isReady,
     emptySeats: seats.filter((s) => !s).length,
-    canStart: isHost && othersReady && !!mine,
+    canStart: isHost && othersReady && !!mine && (!room?.matching?.enabled || mine.preferenceSelected && mine.ready) && (!room?.matching || room.matching.phase === 'idle'),
     othersReady,
     // spectator seats (never players: not in `humans`, never counted for ready / start)
     spectators: Array.isArray(room?.spectators) ? room.spectators.filter((s) => s && typeof s === 'object') : [],
@@ -115,7 +118,7 @@ function SeatCard({ seat, index, room, facts, myId, busy, onAddBot, onRemoveBot,
       </div>
       <footer class="seat__foot">
         ${canAdd
-          ? html`<${Button} variant="secondary" size="sm" icon="robot" block=${true} loading=${busy === `add`} onClick=${onAddBot}>${t('添加 AI 队友')}<//>`
+          ? html`<${Button} variant="secondary" size="sm" icon="robot" block=${true} disabled=${!!room.matching?.enabled || !!room.matching?.generated} loading=${busy === `add`} onClick=${onAddBot}>${t('添加 AI 队友')}<//>`
           : html`<span class="seat__state t-dim">${t('空位')}</span>`}
       </footer>
     </article>`;
@@ -141,7 +144,7 @@ function SeatCard({ seat, index, room, facts, myId, busy, onAddBot, onRemoveBot,
       <span class="seat__name">${seat.name || t('博士')}</span>
       ${isMe ? html`<span class="seat__you">${t('你')}</span>` : null}
     </div>
-    <${MicroLabel}>${seat.isBot ? 'AUTONOMOUS UNIT' : `DOCTOR #${seat.doctorCode || doctorNo(seat.playerId)}`}<//>
+    ${room.matching?.rules && !seat.isBot ? html`<${MicroLabel}>DOCTOR<//><span class="seat__preference">${seat.preferenceSelected ? data.get('bonds')?.[seat.preference]?.name || t('不限') : t('等待选择盟约')}</span>` : html`<${MicroLabel}>${seat.isBot ? 'AUTONOMOUS UNIT' : `DOCTOR #${seat.doctorCode || doctorNo(seat.playerId)}`}<//>`}
     <footer class="seat__foot">
       <span class=${`seat__state seat__state--${state}`}>
         ${state === 'ready' ? html`<${Icon} name="check" />${t('已就绪')}`
@@ -150,10 +153,10 @@ function SeatCard({ seat, index, room, facts, myId, busy, onAddBot, onRemoveBot,
           : html`<${Icon} name="hourglass" />${t('准备中')}`}
       </span>
       ${seat.isBot && facts.isHost ? html`<${Tooltip} text=${t('移除该 AI 队友')}>
-        <${Button} variant="ghost" size="sm" square=${true} icon="close" loading=${busy === `rm${index}`} onClick=${() => onRemoveBot(index)} aria-label=${t('移除 AI 队友')} />
+        <${Button} variant="ghost" size="sm" square=${true} icon="close" disabled=${!!room.matching && room.matching.phase !== 'idle'} loading=${busy === `rm${index}`} onClick=${() => onRemoveBot(index)} aria-label=${t('移除 AI 队友')} />
       <//>` : null}
       ${!seat.isBot && !isMe && facts.isHost ? html`<${Tooltip} text=${t('将该博士移出同盟')}>
-        <${Button} variant="ghost" size="sm" square=${true} icon="close" loading=${busy === `kick${index}`} onClick=${() => onKick(index, seat.name, seat.playerId)} aria-label=${t('移出该博士')} />
+        <${Button} variant="ghost" size="sm" square=${true} icon="close" disabled=${!!room.matching && room.matching.phase !== 'idle'} loading=${busy === `kick${index}`} onClick=${() => onKick(index, seat.name, seat.playerId)} aria-label=${t('移出该博士')} />
       <//>` : null}
     </footer>
   </article>`;
@@ -201,7 +204,7 @@ function DifficultyPicker({ room, isHost, busy, onPick }) {
   return html`<div class="dpick" role="radiogroup" aria-label=${t('模拟难度')}>
     ${DIFFICULTIES.map((d) => html`<button key=${d} type="button" role="radio" aria-checked=${room.difficulty === d ? 'true' : 'false'}
         class=${`dpick__opt${room.difficulty === d ? ' is-active' : ''}`} style=${`--d-color:${DIFFICULTY_COLORS[d]}`}
-        disabled=${!!busy} onClick=${() => room.difficulty !== d && onPick(d)}>
+        disabled=${!!busy || (!!room.matching && room.matching.phase !== 'idle')} onClick=${() => room.difficulty !== d && onPick(d)}>
       <${DifficultyIcon} difficulty=${d} />${t(DIFFICULTY_NAMES[d].replace('模拟', ''))}
     </button>`)}
   </div>`;
@@ -224,6 +227,7 @@ function AiLastToggle({ option, busy, onToggle }) {
 
 /** Room screen component. */
 export function RoomScreen() {
+  useData('bonds');
   const room = useStore((s) => s.room);
   const me = useStore((s) => s.me, shallowEqual);
   const conn = useStore((s) => s.connection, shallowEqual);
@@ -244,7 +248,7 @@ export function RoomScreen() {
     if (!online) { toast(t('连接中断，请稍候重试'), 'warn'); return; }
     inFlight.current = true;
     setBusy(kind);
-    try { await fn(); } catch (err) { toastError(err); } finally {
+    try { await fn(); } catch (err) { if (!showMatchingAdmissionError(err)) toastError(err); } finally {
       inFlight.current = false;
       if (alive.current) setBusy(null);
     }
@@ -320,7 +324,7 @@ export function RoomScreen() {
         <h1 class="topbar__title">${coop ? t('同盟模拟') : t('独立模拟')}<span class="topbar__sep"></span><${DifficultyTag} difficulty=${room.difficulty} size="lg" /></h1>
       </div>
       <div class="topbar__right">
-        ${coop ? html`<${InviteBox} code=${room.code} name=${me.name} difficulty=${room.difficulty} />` : html`<div class="solo-note"><${MicroLabel}>SINGLE OPERATOR<//><span>${t('仅限 1 名博士')}</span></div>`}
+        ${coop ? html`${room.code ? html`<${InviteBox} code=${room.code} name=${me.name} difficulty=${room.difficulty} />` : html`<p class="t-lo">${t('匹配补位已开启，分享代码和链接已停用')}</p>`}` : html`<div class="solo-note"><${MicroLabel}>SINGLE OPERATOR<//><span>${t('仅限 1 名博士')}</span></div>`}
       </div>
     </header>
 
@@ -345,7 +349,8 @@ export function RoomScreen() {
         <span class="room-bar__label">${t('模拟难度')}<${MicroLabel}>DIFFICULTY<//></span>
         <div class="room-bar__opts">
           <${DifficultyPicker} room=${room} isHost=${facts.isHost} busy=${busy} onPick=${setDifficulty} />
-          <${AiLastToggle} option=${aiLastOption(room, me.playerId)} busy=${busy} onToggle=${setAiLast} />
+          <${AiLastToggle} option=${aiLastOption(room, me.playerId)} busy=${busy || (!!room.matching && room.matching.phase !== 'idle')} onToggle=${setAiLast} />
+          <${MatchingBackfillToggle} room=${room} myId=${me.playerId} online=${online} />
         </div>
       </div>
       <div class="room-bar__center">
@@ -360,6 +365,7 @@ export function RoomScreen() {
       </div>
       <div class="room-bar__right">
         <${LoadoutButton} from="room" size="lg" class="room-loadout" label=${t('干员调配')} />
+        ${room.matching?.enabled && facts.mine && (facts.isHost || !myReady) ? html`<${RoomAllianceButton} room=${room} online=${online} ready=${myReady} />` : null}
         ${facts.isHost
           ? html`<${Tooltip} text=${facts.canStart ? null : t('仍有博士未准备就绪')}>
               <${Button} variant="primary" size="xl" icon="play" loading=${busy === 'start'} disabled=${!facts.canStart || !online} onClick=${start}>${t('开始模拟')}<//>
@@ -367,7 +373,7 @@ export function RoomScreen() {
           : facts.spectating
             ? html`<${Button} variant="secondary" size="xl" icon="eye" disabled=${true}>${t('观战中')}<//>`
           : html`<${Button} variant=${myReady ? 'primary' : 'secondary'} size="xl" icon=${myReady ? 'check' : 'hourglass'} active=${myReady}
-              loading=${busy === 'ready'} disabled=${!online || !facts.mine} onClick=${toggleReady}>${myReady ? t('已就绪') : t('准备就绪')}<//>`}
+              loading=${busy === 'ready'} disabled=${!!room.matching?.enabled && !myReady || !online || !facts.mine || (!!room.matching && room.matching.phase !== 'idle')} onClick=${toggleReady}>${myReady ? t('已就绪') : t('准备就绪')}<//>`}
       </div>
     </footer>
   </div>`;

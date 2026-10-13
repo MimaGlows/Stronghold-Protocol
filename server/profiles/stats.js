@@ -78,10 +78,11 @@ export class AccountStats {
   }
   settle(ctx, summary) {
     for (const owner of ctx.profiles) {
-      const rec = buildRecord(summary, { myId: owner.playerId, roomMode: ctx.match.mode, now: ctx.statsStartedAt + ctx.match.sched.now() - ctx.match.startedAt });
+      const rec = buildRecord({ ...summary, isMatchingMatch: !!ctx.matching }, { myId: owner.playerId, roomMode: ctx.match.mode, now: ctx.statsStartedAt + ctx.match.sched.now() - ctx.match.startedAt });
       if (!rec) continue;
       rec.id = ctx.statsId;
       if (rec.players.find((p) => p.playerId === owner.playerId)?.left) continue;
+      rec.isMatchingMatch = !!ctx.matching;
       const a = summary.replay && (this.archive.pending.get(summary.replay.id) || this.rawArchive(summary.replay.id));
       if (a) rec.replay = this.ticket(owner.profile, a);
       owner.profile = this.put(owner.profile, rec);

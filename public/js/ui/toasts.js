@@ -10,6 +10,7 @@ import htm from '../../vendor/htm.module.js';
 import { ERR_TEXT } from '../../../shared/constants.js';
 import { t } from '../../../shared/i18n.js';
 import { recordError } from '../diag.js';
+import { showMatchingAdmissionError } from './matchingFeedback.js';
 
 // no shared static vnodes (see components.js hFresh: htm's static cache would retain unmounted DOM)
 function hFresh(type, props, ...children) {
@@ -110,6 +111,7 @@ export function describeError(err) {
  */
 export function toastError(err) {
   recordError('request', err);
+  if (showMatchingAdmissionError(err)) return -1;
   return toast(describeError(err), 'error');
 }
 

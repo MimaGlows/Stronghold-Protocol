@@ -237,6 +237,9 @@ export class Match {
     this.difficulty = opts.difficulty;
     this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
     this.seed = (Number(opts.seed) >>> 0) || 1;
+    this.matchingPreferences = opts.matchingPreferences || null;
+    this.isMatchingMatch = !!opts.isMatchingMatch;
+    this.matchingBondWeights = opts.matchingBondWeights || null;
     this.log = opts.log || noopLog;
     this.sendFn = opts.send;
     this.broadcastFn = opts.broadcast;
@@ -327,7 +330,9 @@ export class Match {
     this.factions = setup.factions;
     this.bossId = setup.bossId;
     this.hiddenBossId = setup.hiddenBossId;
-    const bans = drawDisabledBonds(this.gd, this.rngSetup);
+    // Owner-approved matching bias. Its separate stream never changes ordinary setup RNG.
+    const protect = this.matchingPreferences && rng('matching-preference')() < (opts.matchingProtection ?? 0.6) ? this.matchingPreferences : [];
+    const bans = drawDisabledBonds(this.gd, this.matchingBondWeights ? rng('matching-room-bans') : this.rngSetup, this.matchingBondWeights ? [] : protect, this.matchingBondWeights);
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
     this.bannedChess = bans.banned;
@@ -373,6 +378,7 @@ export class Match {
     this.sp = null;
     this.wave = null;
     this.bossWaves = null;
+    this.bossPairs = null; // drawn once per match; the hidden round retains partners and sides
     this.fields = [];
     this.runner = null;
     /** playerId → fieldId */

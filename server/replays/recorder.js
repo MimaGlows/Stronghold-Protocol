@@ -8,7 +8,7 @@ const ACTIONS = { buy: 'buy', move: 'move', sell: 'sell', equip: 'equip', useArt
 export class MatchRecorder {
   constructor(match, archive) {
     this.m = match; this.archive = archive; this.seq = 0; this.pauseStart = null; this.lastPaused = false; this.lastPhase = ''; this.closed = false;
-    this.record = { v: 1, id: randomUUID(), key: randomBytes(24).toString('hex'), startedAt: Date.now(), durationMs: 0, version: archive.version, simulationVersion: archive.simulationVersion,
+    this.record = { v: 1, isMatchingMatch: !!match.isMatchingMatch, id: randomUUID(), key: randomBytes(24).toString('hex'), startedAt: Date.now(), durationMs: 0, version: archive.version, simulationVersion: archive.simulationVersion,
       participants: match.order.map(({ playerId, seat, name, isBot, doctorCode }) => ({ playerId, seat, name, isBot, doctorCode })),
       restrictions: { modeId: match.modeId, difficulty: match.difficulty, stageId: match.stageId, factions: clone(match.factions),
         disabledBonds: [...new Set([...match.disabledBonds, ...match.staticInactiveBonds])], drawnDisabledBonds: [...match.disabledBonds],

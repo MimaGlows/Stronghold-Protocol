@@ -103,6 +103,7 @@ test('share codes survive restart and expiry; adding a code to an old encoded re
     assert.deepEqual(a.getShared(code).fields, r.fields); assert.equal(a.getShared(code).key, undefined);
     const other = record(); a.write(other); assert.notEqual(other.shareCode, code);
     await a.close(); a = new ReplayArchive(dir, quiet, { now: () => r.expiresAt, version: 'v1', ttlMs: 72 * 3600 * 1000 });
+    await a.ready;
     const expired = a.getShared(code); assert.equal(expired.status, 'expired'); assert.equal(expired.expiryReason, 'time'); assert.deepEqual(expired.result, r.result); assert.deepEqual(expired.fields, []);
   } finally { await a.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

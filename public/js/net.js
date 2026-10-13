@@ -278,7 +278,7 @@ export class Net {
     if (changed) {
       this._emit('profileChanging', { name: n });
       // Queued edits belong to the old profile and must not flush after the new welcome.
-      for (const [rid, entry] of [...this._pending]) if (entry.msg.t.startsWith('social.') || ['g.ping', 'g.radio'].includes(entry.msg.t) || ['profile.avatar', 'profile.records', 'profile.voice', 'room.loadout', 'room.ownership', 'room.diy'].includes(entry.msg.t)) {
+      for (const [rid, entry] of [...this._pending]) if (entry.msg.t.startsWith('social.') || entry.msg.t.startsWith('matching.') || ['g.ping', 'g.radio'].includes(entry.msg.t) || ['profile.avatar', 'profile.records', 'profile.voice', 'room.loadout', 'room.ownership', 'room.diy'].includes(entry.msg.t)) {
         this._pending.delete(rid); this._clearEntryTimer(entry);
         if (entry.sent) { this._expired.add(rid); if (this._expired.size > 64) this._expired.delete(this._expired.values().next().value); }
         entry.reject(new NetError('OFFLINE'));
