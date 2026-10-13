@@ -50,11 +50,12 @@ test('the release version is what players see', () => {
   assert.match(read('server/http/routes.js'), /app: APP_VERSION/, '/healthz');
 });
 
-test('the English title is the official one: Stronghold Protocol: Alliance (as in the reply to GitHub issue #38, which stays open)', () => {
+test('the custom README identifies MimaGlows while preserving the official Stronghold Protocol: Alliance title', () => {
   // EN client data, activity_table basicInfo.act2autochess.name = "Stronghold Protocol: Alliance" (CN 卫戍协议:盟约);
   // the project used to call it "Covenant". The Chinese title stays 卫戍协议：盟约; the repository keeps its name.
   const readme = read('README.md');
-  assert.match(readme.split('\n')[0], /^# 卫戍协议：盟约 · Stronghold Protocol: Alliance$/, 'README title');
+  assert.match(readme.split('\n')[0], /^# 网页版卫戍协议 · MimaGlows 个人优化版$/, 'custom README title');
+  assert.match(readme, /^# 卫戍协议：盟约 · Stronghold Protocol: Alliance$/m, 'official title retained in the upstream README');
   assert.match(readme, /mode \*Stronghold Protocol: Alliance\*/, 'README English summary');
   assert.match(read('server/http/boot.js'), /卫戍协议：盟约 · Stronghold Protocol: Alliance v/, 'boot banner');
   assert.equal(pkg.name, 'stronghold-protocol-alliance');

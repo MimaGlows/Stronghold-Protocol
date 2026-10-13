@@ -1,147 +1,156 @@
-// Control delivery across two connections while using the real client and server hello handlers.
+// Real browser Net + identity helper against the custom server's account-consent handshake.
+// This fork restores running games by callsign#code, not the upstream browser-local match catalogue.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import WebSocket from 'ws';
 import { createIdentity, Net } from '../public/js/net.js';
-import { Network, SessionRegistry } from '../server/net.js';
+import { startServer } from '../server/index.js';
+import { StubMatch } from '../server/match/StubMatch.js';
 import { validateC2S } from '../shared/protocol.js';
+import { TestClient } from './helpers/wsClient.js';
 
 function storage() {
-  const m = new Map();
-  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) };
+  const values = new Map();
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, String(value)), removeItem: key => values.delete(key) };
 }
-function hub() {
-  const members = new Set();
-  return { create() {
-    const channel = {
-      listeners: [],
-      postMessage(data) {
-        for (const peer of members) if (peer !== channel) queueMicrotask(() => {
-          if (members.has(peer)) for (const fn of peer.listeners) fn({ data: structuredClone(data) });
-        });
-      },
-      addEventListener(type, fn) { if (type === 'message') this.listeners.push(fn); },
-      close() { members.delete(channel); },
-    };
-    members.add(channel); return channel;
-  } };
-}
+
 async function harness(t) {
-  const local = storage(), ownerSession = storage(), guestSession = storage(), channels = hub();
-  const registry = new SessionRegistry(), server = new Network({ registry, handler: { onMessage() {} } });
-  const ownerSeat = registry.create('Owner'), guestSeat = registry.create('Guest'), clients = [];
-  t.after(() => { for (const net of clients) net.close(); clearInterval(server.heartbeatTimer); clearInterval(server.sweepTimer); });
-  const ownerChannel = channels.create();
-  const owner = createIdentity({ local, session: ownerSession, channel: ownerChannel, tabId: 'z-owner', queryMs: 1, now: () => 100 });
-  await owner.init(); owner.saveToken(ownerSeat.token); owner.rememberMatch({ name: 'Owner', code: 'ROOM1' });
-  const guest = createIdentity({ local, session: guestSession, channel: channels.create(), tabId: 'a-guest', queryMs: 1, now: () => 200 });
-  await guest.init(); guest.saveToken(guestSeat.token);
-  const client = (identity) => {
-    const sockets = [], welcomes = [], frames = [];
-    class Socket {
-      constructor() { this.readyState = 0; this.sent = []; sockets.push(this); }
-      send(raw) { this.sent.push(JSON.parse(raw)); }
-      // Client close need not reach the server before an already sent hello on this connection.
-      close(code) { this.readyState = 3; this.onclose?.({ code }); }
-      open() { this.readyState = 1; this.onopen?.(); }
-    }
-    const net = new Net({ WebSocket: Socket, getToken: () => identity.getToken(), getTokenClaim: () => identity.getTokenClaim() });
-    clients.push(net);
-    net.on('welcome', (m) => { welcomes.push(m); identity.saveToken(m.token); });
-    net.setName('Owner');
-    const ws = sockets[0]; ws.open();
-    const conn = { session: null, ip: '?', key: null, ws: {
-      readyState: 1, bufferedAmount: 0,
-      send(raw) { frames.push(JSON.parse(raw)); ws.onmessage?.({ data: raw }); },
-      close(code) { this.readyState = 3; ws.close(code); },
-    } };
-    return { net, ws, conn, welcomes, frames, sockets,
-      hello: () => ws.sent.find((m) => m.t === 'hello'),
-      deliver() {
-        const msg = ws.sent.find((m) => m.t === 'hello');
-        assert.equal(validateC2S(msg), null);
-        server.onHelloMsg(conn, msg, Date.now());
-      },
-    };
-  };
-  return { local, ownerSession, guestSession, channels, ownerSeat, guestSeat, ownerChannel, owner, guest, client,
-    async reload() {
-      const id = createIdentity({ local, session: ownerSession, channel: channels.create(), tabId: 'zz-reloaded', queryMs: 1, now: () => 300 });
-      assert.equal(await id.init(), ownerSeat.token); return id;
-    },
-  };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-client-handshake-')), clients = [];
+  const server = await startServer({ port: 0, host: '127.0.0.1', quiet: true, MatchClass: StubMatch,
+    profileDir: path.join(dir, 'profiles'), replayDir: path.join(dir, 'replays'),
+    matchmakingDir: path.join(dir, 'matching'), profileTransferCooldownMs: 0 });
+  t.after(async () => {
+    for (const client of clients) client.net.close();
+    await Promise.all(clients.map(client => client.wire.closed));
+    await server.close();
+    assert.equal(path.dirname(path.resolve(dir)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(dir).startsWith('sp-client-handshake-'));
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+  async function client(token) {
+    const session = storage(), identity = createIdentity({ local: storage(), session, channel: null });
+    await identity.init();
+    if (token) identity.saveToken(token);
+    const net = new Net({ url: `ws://127.0.0.1:${server.port}/ws`, WebSocket, getToken: () => identity.getToken() });
+    net.on('welcome', message => identity.saveToken(message.token));
+    net.setName('博士#0001');
+    const result = { net, identity, session, wire: new TestClient(net.ws) };
+    clients.push(result);
+    return result;
+  }
+  const owner = await client(), welcome = await owner.wire.waitFor('welcome');
+  await owner.net.request('room.create', { mode: 'solo', difficulty: 'NORMAL' });
+  await owner.net.request('room.start');
+  await owner.wire.waitFor('m.private');
+  const room = server.lobby.roomOf(server.registry.byId(welcome.playerId));
+  return { server, client, owner, welcome, room, ownerSocket: server.registry.byId(welcome.playerId).ws };
 }
 
-test('a recovery hello already in flight cannot displace the original window after its reload welcome', async (t) => {
-  const h = await harness(t);
-  h.ownerChannel.close();
-  assert.equal(await h.guest.resume(h.guest.recoverable()[0].id), true);
-  const pending = h.client(h.guest);
-  assert.equal(pending.hello().noReplace, true);
-  const owner = h.client(await h.reload()); owner.deliver();
-  assert.equal(h.guest.getToken(), h.guestSeat.token);
-  pending.deliver();
-  assert.equal(pending.frames.at(-1).code, 'SESSION_IN_USE');
-  assert.equal(owner.net.status, 'online'); assert.equal(owner.net.lastError, null);
-  assert.equal(h.ownerSeat.ws, owner.conn.ws);
-  assert.equal(pending.welcomes.length, 0);
-  assert.equal(h.guestSession.getItem('sp.token'), h.guestSeat.token);
+for (const withToken of [false, true]) {
+  test(`running account recovery ${withToken ? 'with the reconnect token' : 'without a token'} waits for owner consent before welcome and queued actions`, async t => {
+    const h = await harness(t), next = await h.client(withToken ? h.welcome.token : undefined);
+    const pending = await next.wire.waitFor('profile.transferPending');
+    const prompt = await h.owner.wire.waitFor('profile.transferRequest');
+    assert.equal(pending.requestId, prompt.requestId);
+    assert.equal(next.net.status, 'handshaking');
+    assert.equal(next.net.playerId, null);
+    assert.equal(next.identity.getToken(), withToken ? h.welcome.token : null);
+    assert.equal(h.owner.net.status, 'online');
+    assert.equal(h.server.registry.size, 1);
+    assert.ok(!next.wire.log.some(message => ['welcome', 'room.state', 'm.private'].includes(message.t)));
+
+    const queued = next.net.request('g.refresh');
+    queued.catch(() => {}); // Still await the outcome below; keep cleanup safe if an earlier assertion fails.
+    assert.equal(next.net.pendingCount, 1);
+    await h.owner.net.request('profile.transferResponse', { requestId: prompt.requestId, accept: true });
+    const welcome = await next.wire.waitFor('welcome');
+    assert.equal(welcome.playerId, h.welcome.playerId);
+    assert.equal(welcome.resumed, true);
+    assert.equal(next.net.status, 'online');
+    assert.equal(next.identity.getToken(), h.welcome.token);
+    assert.equal(next.session.getItem('sp.token'), h.welcome.token);
+    assert.equal((await queued).t, 'ok');
+    assert.equal((await next.wire.waitFor('m.private')).playerId, h.welcome.playerId);
+    assert.equal((await h.owner.wire.closed).code, 4001);
+    assert.equal(h.owner.net.status, 'closed');
+    assert.equal(h.owner.net.lastError.code, 'REPLACED');
+    assert.equal(h.server.lobby.roomOf(h.server.registry.byId(welcome.playerId)), h.room);
+    assert.equal(h.server.network.profileTransfers.size, 0);
+  });
+}
+
+test('owner refusal preserves the running game and rejects the requester queue without saving a token', async t => {
+  const h = await harness(t), next = await h.client();
+  await next.wire.waitFor('profile.transferPending');
+  const prompt = await h.owner.wire.waitFor('profile.transferRequest');
+  const rejected = assert.rejects(next.net.request('g.refresh'), error => error.code === 'OFFLINE');
+  await h.owner.net.request('profile.transferResponse', { requestId: prompt.requestId, accept: false });
+  assert.equal((await next.wire.waitFor('error')).code, 'PROFILE_DENIED');
+  await rejected;
+  assert.equal(next.net.status, 'connected');
+  assert.equal(next.net.lastError.code, 'PROFILE_DENIED');
+  assert.equal(next.net.playerId, null);
+  assert.equal(next.session.getItem('sp.token'), null);
+  assert.ok(!next.wire.log.some(message => ['welcome', 'm.private'].includes(message.t)));
+  assert.equal(h.owner.net.status, 'online');
+  assert.equal(h.server.registry.byId(h.welcome.playerId).ws, h.ownerSocket);
+  assert.equal((await h.owner.net.request('ping', { c: 42 })).t, 'pong');
+  assert.equal(h.server.network.profileTransfers.size, 0);
 });
 
-test('a later welcomed holder also yields; its buffered reconnect cannot override the earlier welcome', async (t) => {
+test('a complete account identity restores an offline game and saves the server reconnect token', async t => {
   const h = await harness(t);
-  h.ownerChannel.close();
-  assert.equal(await h.guest.resume(h.guest.recoverable()[0].id), true);
-  const recovered = h.client(h.guest); recovered.deliver();
-  assert.equal(recovered.net.status, 'online');
-  const delayedReconnect = h.client(h.guest);
-  assert.equal(delayedReconnect.hello().claimAt, 200);
-  assert.equal(delayedReconnect.hello().noReplace, undefined);
-  const owner = h.client(await h.reload()); owner.deliver();
-  assert.equal(h.guest.getToken(), null);
-  assert.equal(h.guestSession.getItem('sp.token'), null);
-  delayedReconnect.deliver();
-  assert.equal(delayedReconnect.frames.at(-1).code, 'SESSION_IN_USE');
-  assert.equal(owner.net.status, 'online'); assert.equal(owner.net.lastError, null);
-  assert.equal(h.ownerSeat.ws, owner.conn.ws);
-  assert.equal(h.ownerSeat.claimAt, 100);
+  h.owner.net.close();
+  await h.owner.wire.closed;
+  const next = await h.client(), welcome = await next.wire.waitFor('welcome');
+  assert.equal(welcome.playerId, h.welcome.playerId);
+  assert.equal(welcome.resumed, true);
+  assert.equal(next.net.status, 'online');
+  assert.equal(next.net.helloName, '博士#0001');
+  assert.equal(next.identity.getToken(), h.welcome.token);
+  assert.equal(next.session.getItem('sp.token'), h.welcome.token);
+  assert.equal((await next.wire.waitFor('room.state')).code, h.room.code);
+  assert.equal((await next.wire.waitFor('m.private')).playerId, h.welcome.playerId);
+  assert.ok(!next.wire.log.some(message => message.t === 'profile.transferPending'));
 });
 
-test('shared recovery can bind an offline seat and a same-stamp reconnect can replace its own socket', async (t) => {
-  const h = await harness(t);
-  h.ownerChannel.close();
-  assert.equal(await h.guest.resume(h.guest.recoverable()[0].id), true);
-  const first = h.client(h.guest); first.deliver();
-  assert.equal(first.welcomes[0].playerId, h.ownerSeat.playerId);
-  const reconnect = h.client(h.guest); reconnect.deliver();
-  assert.equal(reconnect.welcomes[0].playerId, h.ownerSeat.playerId);
-  const again = h.client(h.guest); again.deliver();
-  assert.equal(again.net.status, 'online');
-  assert.equal(again.welcomes[0].playerId, h.ownerSeat.playerId);
-  assert.equal(h.ownerSeat.claimAt, 200);
+test('closing a pending requester cancels consent and ignores late welcome before listeners or queued actions', async t => {
+  const h = await harness(t), next = await h.client();
+  await next.wire.waitFor('profile.transferPending');
+  const prompt = await h.owner.wire.waitFor('profile.transferRequest');
+  const staleMessageHandler = next.net.ws.onmessage, received = [];
+  next.net.on('*', message => received.push(message));
+  const rejected = assert.rejects(next.net.request('g.refresh'), error => error.code === 'CLOSED');
+  next.net.close();
+  await next.wire.closed;
+  await rejected;
+  await h.owner.wire.waitFor('profile.transferEnded', message => message.requestId === prompt.requestId);
+  staleMessageHandler({ data: JSON.stringify(h.welcome) });
+  assert.equal(next.net.status, 'closed');
+  assert.equal(next.net.playerId, null);
+  assert.equal(next.identity.getToken(), null);
+  assert.equal(next.net.pendingCount, 0);
+  assert.deepEqual(received, []);
+  assert.equal(h.owner.net.status, 'online');
+  assert.equal(h.server.network.profileTransfers.size, 0);
+  await assert.rejects(h.owner.net.request('profile.transferResponse', { requestId: prompt.requestId, accept: true }), error => error.code === 'BAD_TARGET');
 });
 
-test('a stale welcome is discarded before online status, queued actions or welcome listeners', async (t) => {
-  const h = await harness(t);
-  h.ownerChannel.close();
-  assert.equal(await h.guest.resume(h.guest.recoverable()[0].id), true);
-  const pending = h.client(h.guest), published = [], statuses = [];
-  pending.net.on('*', (m) => published.push(m));
-  pending.net.on('status', (s) => statuses.push(s.status));
-  const action = pending.net.request('room.create', { mode: 'solo', difficulty: 'NORMAL' });
-  const rejected = assert.rejects(action, (e) => e.code === 'CLOSED');
-  h.guest.rejectToken();
-  pending.deliver();
-  assert.equal(pending.welcomes.length, 0);
-  assert.equal(published.length, 0);
-  assert.ok(!statuses.includes('online'));
-  assert.ok(!pending.ws.sent.some((m) => m.t === 'room.create'));
-  assert.equal(pending.sockets.length, 2, 'retry uses a new connection, never a repeat hello on the old session');
-  assert.equal(h.guestSession.getItem('sp.token'), h.guestSeat.token);
-  pending.net.close(); await rejected;
-});
-
-test('hello ownership fields reject malformed inputs but remain optional', () => {
-  const hello = { t: 'hello', name: 'Owner', token: 'seat' };
-  for (const fields of [{}, { noReplace: true }, { noReplace: false, claimAt: 100 }]) assert.equal(validateC2S({ ...hello, ...fields }), null);
-  for (const fields of [{ noReplace: 'yes' }, { claimAt: -1 }, { claimAt: Infinity }, { claimAt: '100' }]) assert.equal(typeof validateC2S({ ...hello, ...fields }), 'string');
+test('account hello and explicit transfer fields validate their actual protocol types', () => {
+  const hello = { t: 'hello', name: '博士#0001' };
+  for (const fields of [{}, { token: 'seat', version: 1 }, { avatar: { kind: 'default' } }, { avatar: { kind: 'operator', charId: 'char_010_chen', e2: true } }]) {
+    assert.equal(validateC2S({ ...hello, ...fields }), null);
+  }
+  for (const fields of [{ name: ' ' }, { token: {} }, { token: 'x'.repeat(65) }, { version: -1 }, { version: Infinity }, { avatar: { kind: 'invalid' } }]) {
+    assert.equal(typeof validateC2S({ ...hello, ...fields }), 'string');
+  }
+  const transfer = { t: 'profile.transferResponse', requestId: 'a'.repeat(32), accept: true };
+  assert.equal(validateC2S(transfer), null);
+  assert.equal(validateC2S({ ...transfer, accept: false }), null);
+  for (const fields of [{ requestId: 'fake' }, { accept: 'yes' }, { accept: undefined }]) {
+    assert.equal(typeof validateC2S({ ...transfer, ...fields }), 'string');
+  }
 });
