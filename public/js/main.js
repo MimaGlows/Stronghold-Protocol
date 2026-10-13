@@ -241,10 +241,17 @@ function wireNet() {
   net.on('replaced', () => toast(t('该身份已在其他页面登录，本页已断开'), 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
   net.on('room.state', onRoomState);
-  net.on('matching.returned', backToLobby);
+  net.on('matching.returned', (msg) => {
+    backToLobby();
+    if (msg.reason === 'backfill-disabled') {
+      toast(msg.searching ? t('房主已关闭匹配补位，你已返回大厅继续匹配。') : t('房主已关闭匹配补位，你已返回大厅。'), 'info', { ttl: 5000 });
+      if (msg.error) toastError({ code: msg.error });
+    }
+  });
   net.on('room.closed', (msg) => {
     backToLobby();
     if (msg.reason === 'invited') return;
+    if (msg.reason === 'backfill-disabled') { toast(t('房主已关闭匹配补位，你已返回大厅。'), 'info', { ttl: 5000 }); return; }
     if (msg.reason === 'matching-name') { showMatchingAdmissionError({ code: 'MATCH_NAME' }); return; }
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;
     toast(known ? t(known) : typeof msg.reason === 'string' && msg.reason.length < 60 ? t('同盟已关闭：{reason}', { reason: msg.reason }) : t('同盟已关闭'), 'warn');

@@ -303,7 +303,9 @@ test('after 60s no destination means continued search; room opening triggers imm
   await party(f,[a,b,c]); await start(f,a); now+=60000; service(f).parties.pump();
   assert.equal(partyOf(f,a).phase,'extended'); assert.equal(first.activeHumans().length,2);
   await f.request(h2,{t:'room.leave'}); service(f).parties.pump(); assert.equal(first.activeHumans().length,4); assert.equal(first.match,null);
-  await f.request(h1,{t:'matching.setEnabled',on:false}); await f.request(a,{t:'room.leave'}); await f.request(b,{t:'room.leave'}); await f.request(c,{t:'room.leave'});
+  await f.request(h1,{t:'matching.setEnabled',on:false});
+  assert.equal(first.activeHumans().length,1); assert.equal(f.lobby.roomOf(session(f,a)),null);
+  assert.equal(partyOf(f,a),partyOf(f,b)); assert.equal(partyOf(f,a),partyOf(f,c)); assert.equal(partyOf(f,a).phase,'extended');
   await f.request(h1,{t:'room.addBot'}); assert.equal(first.seats.filter((s)=>s?.isBot).length,1);
   assert.equal((await h1.request({t:'matching.setEnabled',on:true,bond:null,revision:first.matchingRevision})).code,'MATCH_BOTS');
 });

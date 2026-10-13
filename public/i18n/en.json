@@ -1646,5 +1646,8 @@
   "匹配补位已开启，分享代码和链接已停用": "Matchmaking backfill is enabled. Share codes and links are disabled.",
   "正在使用自定义头像。匹配期间将临时显示阿罗玛·精英头像，也可改用干员头像；退出匹配后恢复原头像。": "Your custom avatar temporarily displays Aroma’s elite portrait during matchmaking. You can choose an operator portrait; your original avatar returns afterward.",
   "接受并切换队伍": "Accept and switch teams",
-  "确认后退出当前房间或匹配队伍；加入失败时保留原状态。": "Confirm to leave your current room or matchmaking party. If joining fails, your current state is preserved."
+  "确认后退出当前房间或匹配队伍；加入失败时保留原状态。": "Confirm to leave your current room or matchmaking party. If joining fails, your current state is preserved.",
+  "房主已关闭匹配补位，你已返回大厅继续匹配。": "The host disabled matchmaking backfill. You have returned to the lobby and resumed matchmaking.",
+  "房主已关闭匹配补位，你已返回大厅。": "The host disabled matchmaking backfill. You have returned to the lobby.",
+  "关闭补位后，匹配玩家将返回大厅继续匹配。": "Disabling backfill returns matchmade players to the lobby to continue matchmaking."
 }

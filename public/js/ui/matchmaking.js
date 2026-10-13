@@ -140,6 +140,7 @@ export function MatchingBackfillToggle({ room, myId, online }) {
   const host = room.hostId === myId;
   return html`<label class="matching-toggle"><input type="checkbox" checked=${!!room.matching?.enabled} disabled=${!host || room.inMatch || busy || !online}
       onChange=${async (e) => { if (e.currentTarget.checked) { setOpen(true); return; } setBusy(true); await request('matching.setEnabled', { on: false, revision: room.matching.revision }); setBusy(false); }} />${t('是否同意匹配玩家补位')}</label>
+    ${host && room.matching?.enabled ? html`<p class="t-lo">${t('关闭补位后，匹配玩家将返回大厅继续匹配。')}</p>` : null}
     <${AlliancePicker} open=${open && host} onClose=${() => setOpen(false)} room=${room} enableBackfill=${true} difficulty=${room.difficulty} online=${online} />`;
 }
 export function RoomAllianceButton({ room, online, ready }) {

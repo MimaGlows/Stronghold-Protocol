@@ -681,7 +681,7 @@ export class Lobby {
     if (room.difficulty !== difficulty) {
       room.difficulty = difficulty;
       room.matchingRevision++;
-      for (const seat of room.activeHumans()) if (seat.matchingSource) this.matchmakingService.clearInvalidPreference(this.registry.byId(seat.playerId), difficulty);
+      // Only this room's choices are invalidated; preserve the account preference for a possible return to its queue.
       for (const s of room.activeHumans()) if (!validPreference(this.safeData(), difficulty, s.preference)) {
         s.preference = null; s.preferenceSelected = false;
         this.sendToPlayer(room, s.playerId, { t: 'm.toast', kind: 'warn', text: N_('切换难度后，原阵营偏好不可用，已清空') });

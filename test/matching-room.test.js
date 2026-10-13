@@ -50,7 +50,6 @@ test('backfill atomically revokes public access, kicks rejected names, resets re
   assert.equal((await guest.request({ t: 'room.ready', ready: true })).code, 'MATCH_PREFERENCE');
   assert.equal((await h.request({ t: 'room.start' })).code, 'NOT_READY');
   await f.prepare(guest, null); assert.equal(room.seatOf(guest.id).preferenceSelected, true);
-  room.seatOf(guest.id).matchingSource = true;
   await f.disable(h);
   assert.equal(room.matchmaking, false); assert.equal(room.toState().matching.rules, false); assert.equal(room.activeHumans().length, 2);
   assert.notEqual(room.shareCode, original); assert.equal(room.seatOf(guest.id).matchingSource, false);

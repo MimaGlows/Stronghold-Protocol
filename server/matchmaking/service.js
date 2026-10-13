@@ -119,11 +119,13 @@ export class MatchmakingService {
     }
     const newCode = on ? null : this.lobby.genCode();
     if (!on && !newCode) return fail(ERR.INTERNAL);
+    const returned = on ? null : this.parties.detachBackfilled(room);
+    if (room.disposed) { if (returned) this.parties.resumeBackfilled(returned); this.parties.pump(); return ok; }
     this.lobby.revokeShare(room);
     room.matchmaking = on;
     if (!on) room.shareCode = newCode;
     for (const seat of room.activeHumans()) {
-      seat.preference = null; seat.preferenceSelected = false; seat.ready = false; seat.matchingSource = false;
+      seat.preference = null; seat.preferenceSelected = false; seat.ready = false; seat.matchingSource = false; seat.matchingOrigin = null;
     }
     if (on) {
       const host = room.seatOf(session.playerId);
@@ -135,7 +137,9 @@ export class MatchmakingService {
         else if (target) target.notice = 'matching-name';
       }
     }
-    this.lobby.broadcastState(room); this.parties.pump(); return ok;
+    this.lobby.broadcastState(room);
+    if (returned) this.parties.resumeBackfilled(returned);
+    this.parties.pump(); return ok;
   }
   roomPrepare(session, { bond, revision }) {
     const room = this.lobby.roomOf(session);

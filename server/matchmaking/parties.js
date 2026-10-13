@@ -208,6 +208,54 @@ export class MatchingParties {
     }
     return [];
   }
+  detachBackfilled(room) {
+    const groups = new Map(), notices = [];
+    for (const seat of room.activeHumans().filter((s) => s.matchingSource)) {
+      const s = this.lobby.registry.byId(seat.playerId);
+      if (!s) { this.lobby.removeMember(room, seat.playerId); continue; }
+      const origin = seat.matchingOrigin || { id: seat.playerId, difficulty: room.difficulty, leaderId: seat.playerId,
+        members: [{ playerId: seat.playerId, identity: this.service.identity(s) }], waitedMs: 0, excludedRooms: [] };
+      if (this.service.partyForIdentity(s)) { notices.push({ session: s, error: ERR.MATCH_LOCKED }); continue; }
+      const key = origin.id;
+      if (!groups.has(key)) groups.set(key, { origin, sessions: [] });
+      groups.get(key).sessions.push(s);
+    }
+    const returned = [];
+    // Install account membership before leaving: social presence must keep matching privacy throughout the transfer.
+    for (const { origin, sessions } of groups.values()) {
+      sessions.sort((a, b) => origin.members.findIndex((m) => m.playerId === a.playerId) - origin.members.findIndex((m) => m.playerId === b.playerId));
+      const p = { id: randomUUID(), revision: 0, leaderId: sessions.some((s) => s.playerId === origin.leaderId) ? origin.leaderId : sessions[0].playerId,
+        difficulty: origin.difficulty, phase: 'backfilled', attempt: null,
+        members: sessions.map((s) => ({ playerId: s.playerId, identity: this.service.identity(s), name: s.profile?.name || s.name, ready: true, connected: !!s.connected })) };
+      this.parties.set(p.id, p);
+      for (const s of sessions) this.membership.set(s.playerId, p.id);
+      const changedAccount = sessions.some((s) => !origin.members.some((m) => m.playerId === s.playerId && m.identity === this.service.identity(s)));
+      returned.push({ party: p, origin, error: changedAccount ? ERR.MATCH_ACCOUNT : null });
+    }
+    for (const seat of [...room.activeHumans()].filter((s) => s.matchingSource)) this.lobby.removeMember(room, seat.playerId);
+    return { returned, notices, roomCode: room.code };
+  }
+  resumeBackfilled({ returned, notices, roomCode }) {
+    for (const item of returned) {
+      const { party: p, origin } = item;
+      const error = item.error || this.check(p, false).error || null;
+      if (error) { p.phase = 'idle'; for (const m of p.members) m.ready = false; }
+      else {
+        const waitedMs = Math.max(0, origin.waitedMs || 0);
+        p.attempt = { id: randomUUID(), seed: this.service.nextSeed(), startedAt: this.lobby.now() - waitedMs,
+          order: origin.order || ++this.sequence, excludedRooms: [...new Set([...(origin.excludedRooms || []), roomCode])] };
+        p.phase = waitedMs >= (this.lobby.opts.matchmakingWaitMs ?? MATCH_WAIT_MS) ? 'extended' : 'searching';
+      }
+      for (const m of p.members) this.returnNotice(this.session(m), !error, error);
+      this.publish(p);
+    }
+    for (const { session, error } of notices) { this.returnNotice(session, false, error); this.service.state(session); }
+  }
+  returnNotice(session, searching, error) {
+    if (!session) return;
+    if (session.connected) sendSession(session, { t: 'matching.returned', reason: 'backfill-disabled', searching, ...(error ? { error } : {}) });
+    else session.notice = 'backfill-disabled';
+  }
   transfer(parties, room = null) {
     const original = parties.flatMap((p) => p.members).map((m) => this.session(m));
     if (!room) {
@@ -216,9 +264,18 @@ export class MatchingParties {
       room = this.lobby.roomOf(host); room.queueGenerated = true; this.lobby.revokeShare(room);
     }
     const generated = room.queueGenerated;
+    const origins = new Map();
+    if (!generated) for (const p of parties) {
+      const origin = { id: p.id, difficulty: p.difficulty, leaderId: p.leaderId,
+        members: p.members.map((m) => ({ playerId: m.playerId, identity: m.identity })),
+        waitedMs: Math.max(0, this.lobby.now() - p.attempt.startedAt), order: p.attempt.order,
+        excludedRooms: [...(p.attempt.excludedRooms || [])] };
+      for (const m of p.members) origins.set(m.playerId, origin);
+    }
     for (const s of original) {
       if (s.roomCode !== room.code) { const result = this.lobby.joinRoom(s, room); if (result.error) throw new Error('Validated party transfer failed'); }
       const seat = room.seatOf(s.playerId); seat.ready = true; seat.preferenceSelected = true; seat.preference = this.service.store.get(this.service.identity(s)).preference || null; seat.matchingSource = true;
+      if (!generated) seat.matchingOrigin = origins.get(s.playerId);
     }
     const seed = parties[0].attempt.seed;
     for (const p of parties) { p.phase = generated ? 'playing' : 'backfilled'; if (generated) p.attempt = null; this.publish(p); }
@@ -245,7 +302,7 @@ export class MatchingParties {
         const result=this.transfer(ps); if(result.error) for(const p of ps) this.cancel(p);
       }
       for (const p of queue.filter((v) => v.phase === 'extended')) {
-        const rooms = [...this.lobby.rooms.values()].filter((r) => r.matchmaking && !r.queueGenerated && !r.match && !r.disposed && r.difficulty === p.difficulty && r.seats.filter((s) => s?.isBot).length === 0 && r.seats.filter((s) => !s).length >= p.members.length).sort((a,b) => a.createdAt-b.createdAt || a.code.localeCompare(b.code));
+        const rooms = [...this.lobby.rooms.values()].filter((r) => r.matchmaking && !r.queueGenerated && !r.match && !r.disposed && !p.attempt.excludedRooms?.includes(r.code) && r.difficulty === p.difficulty && r.seats.filter((s) => s?.isBot).length === 0 && r.seats.filter((s) => !s).length >= p.members.length).sort((a,b) => a.createdAt-b.createdAt || a.code.localeCompare(b.code));
         const room = rooms.find((r) => this.compatible([p], r)); if (room) this.transfer([p], room);
       }
       for (const [key, at] of this.cooldowns) if (this.lobby.now()-at > INVITE_COOLDOWN_MS) this.cooldowns.delete(key);
