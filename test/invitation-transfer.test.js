@@ -25,9 +25,9 @@ async function fixture(t) {
     return room(c);
   };
   const search = async c => request(c, { t: 'matching.start', difficulty: 'NORMAL', partyId: party(c)?.id || null, revision: party(c)?.revision || 0 });
-  const invite = async (host, guest, kind = 'matching') => {
+  const invite = async (host, guest, kind = 'matching', difficulty = 'NORMAL') => {
     await request(host, { t: 'social.add', identity: identity(guest) });
-    await request(host, { t: `${kind}.invite`, identity: identity(guest), ...(kind === 'matching' ? { difficulty: 'NORMAL' } : {}) });
+    await request(host, { t: `${kind}.invite`, identity: identity(guest), ...(kind === 'matching' ? { difficulty } : {}) });
     const entries = kind === 'matching' ? parties.invites : f.lobby.social.invites;
     return [...entries.values()].find(i => i.to === identity(guest)).id;
   };
@@ -120,4 +120,19 @@ test('running games can receive an invitation but acceptance preserves the game 
   const id = await f.invite(a, b);
   assert.equal((await b.request({ t: 'matching.inviteRespond', inviteId: id, accept: true })).code, 'ROOM_STARTED');
   assert.equal(f.room(b), old); assert.ok(old.match); assert.equal(f.party(b), null);
+});
+
+test('cross-difficulty invitation preserves the old preference until acceptance and clears it before new preparation', async t => {
+  const f = await fixture(t), a = await f.open('邀请者#0001'), b = await f.open('接受者#0002');
+  const store = f.lobby.matchmakingService.store;
+  await f.request(b, { t: 'matching.prepare', difficulty: 'HARD', bond: 'egirShip', partyId: null, revision: 0 });
+  const previous = f.party(b), attempt = previous.attempt;
+  // FUNNY is the standard mode; the inviter's saved higher-difficulty preference cannot prevent a new party.
+  store.edit(f.identity(a), row => { row.preference = 'egirShip'; });
+  const id = await f.invite(a, b, 'matching', 'FUNNY');
+  assert.equal(store.get(f.identity(a)).preference, null);
+  assert.equal(store.get(f.identity(b)).preference, 'egirShip'); assert.equal(previous.attempt, attempt);
+  await f.request(b, { t: 'matching.inviteRespond', inviteId: id, accept: true });
+  assert.equal(store.get(f.identity(b)).preference, null); assert.equal(f.party(b).difficulty, 'FUNNY');
+  assert.equal(f.party(b).members.find(m => m.playerId === b.id).ready, false);
 });

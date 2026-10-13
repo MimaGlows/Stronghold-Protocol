@@ -96,14 +96,14 @@ export class MatchingParties {
     const d = p?.difficulty || difficulty;
     if (!DIFFICULTIES.includes(d)) return fail(ERR.BAD_MSG);
     const target = targets[0];
-    const c = this.service.checkSession(target, d, this.service.store.get(identity).preference || null); if (c.error) return c;
+    const c = this.service.checkSession(target, d); if (c.error) return c;
     const ids = p?.members.map((m) => m.identity) || [this.service.identity(session)];
     if (ids.some((id) => this.service.store.blocked(id, identity))) return fail(ERR.MATCH_BLOCKED);
     if ([...this.invites.values()].some((i) => i.partyId === p?.id && i.to === identity)) return fail(ERR.ALREADY);
     const key = `${this.service.identity(session)}:${identity}`, now = this.lobby.now();
     if (now - (this.cooldowns.get(key) ?? -Infinity) < INVITE_COOLDOWN_MS) return fail(ERR.RATE);
     if (this.invites.size >= 1000 || (p && p.members.length + [...this.invites.values()].filter((i) => i.partyId === p.id).length >= MAX_SEATS)) return fail(ERR.ROOM_FULL);
-    if (!p) { p = this.ensure(session, d); if (p.error) return p; }
+    if (!p) { p = this.ensure(session, d, null); if (p.error) return p; this.service.clearInvalidPreference(session, d); }
     const i = { id: randomUUID(), partyId: p.id, to: identity, from: this.service.identity(session), expiresAt: now + INVITE_TTL_MS };
     this.invites.set(i.id, i); this.cooldowns.set(key, now);
     for (const s of targets) this.emitInvite(s, i); this.publish(p); return ok;
@@ -117,8 +117,9 @@ export class MatchingParties {
     if (p.members.some((m) => m.identity === i.to)) return fail(ERR.ALREADY);
     if (p.members.length >= MAX_SEATS) return fail(ERR.ROOM_FULL);
     const c = this.check(p, false); if (c.error) return c;
-    const checked = this.service.checkSession(session, p.difficulty, this.service.store.get(i.to).preference || null); if (checked.error) return checked;
+    const checked = this.service.checkSession(session, p.difficulty); if (checked.error) return checked;
     if (p.members.some((m) => this.service.store.blocked(m.identity, i.to))) return fail(ERR.MATCH_BLOCKED);
+    this.service.clearInvalidPreference(session, p.difficulty);
     this.leaveIdentity(session);
     if (this.lobby.roomOf(session)) {
       this.lobby.leave(session); sendSession(session, { t: 'room.closed', reason: 'invited' });
