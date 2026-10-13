@@ -74,7 +74,7 @@ export class AccountStats {
     const ps = m.players.get(playerId);
     const rec = buildQuitRecord({ me: { playerId }, room: { mode: m.mode }, match: { public: m.publicView(), result: null } },
       { live: { active: true, startedAt: ctx.statsStartedAt, sawStart: true, aliveRound: ps?.eliminatedRound || m.round }, now: ctx.statsStartedAt + m.sched.now() - m.startedAt });
-    if (rec) { rec.id = ctx.statsId; rec.reason = reason; owner.profile = this.put(owner.profile, rec); }
+    if (rec) { rec.id = ctx.statsId; rec.reason = reason; if (ctx.matching) rec.isMatchingMatch = true; owner.profile = this.put(owner.profile, rec); }
   }
   settle(ctx, summary) {
     for (const owner of ctx.profiles) {

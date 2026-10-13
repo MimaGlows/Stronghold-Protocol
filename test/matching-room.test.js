@@ -12,6 +12,7 @@ import { GameData } from '../server/match/gamedata.js';
 import { drawDisabledBonds } from '../server/match/pool.js';
 import { createRng } from '../server/sim/rng.js';
 import { compactRecord, normalizeRecord } from '../shared/stats.js';
+import { AccountStats } from '../server/profiles/stats.js';
 
 class CapturedMatch extends StubMatch {
   constructor(options) { super(options); this.options = options; }
@@ -116,4 +117,16 @@ test('matching history flags survive normalization and list compaction', () => {
   const r = normalizeRecord({ isMatchingMatch: true, players: [{ playerId: 'a', name: 'A', stats: {} }], selfId: 'a' });
   assert.equal(r.isMatchingMatch, true); assert.equal(compactRecord(r).isMatchingMatch, true);
   assert.equal(DEFAULT_AVATAR.kind, 'default');
+});
+
+test('leaving a matching game preserves its matching classification in the stored quit record', () => {
+  let saved;
+  const stats = Object.create(AccountStats.prototype);
+  stats.put = (profile, record) => { saved = record; return profile; };
+  const ctx = { statsId: 'game', statsStartedAt: 0, matching: { id: 'matching-game' }, profiles: [{ playerId: 'a', profile: {} }], match: {
+    mode: 'coop', round: 1, startedAt: 0, sched: { now: () => 1000 }, players: new Map([['a', {}]]),
+    publicView: () => ({ phase: 'PREP', round: 1, modeId: 'mode_multi_normal', difficulty: 'NORMAL', players: [{ playerId: 'a', name: 'A', alive: true, stats: {} }] }),
+  } };
+  stats.quit(ctx, 'a'); assert.equal(saved.isMatchingMatch, true); assert.equal(saved.end, 'quit');
+  assert.equal(compactRecord(normalizeRecord(saved)).isMatchingMatch, true);
 });
