@@ -78,7 +78,7 @@ describe("2: the own LP's pending loss is marked live while the battle runs", ()
     assert.equal(ownLeaks(4, undefined), 4);
     for (const [a, b] of [[undefined, undefined], [NaN, null], [-2, 'x']]) assert.equal(ownLeaks(a, b), 0);
     // the game screen feeds liveLp with it
-    assert.match(read('public/js/screens/game.js'), /leaks: ownLeaks\(localLeaks, meP\?\.pendingLp\)/);
+    assert.match(read('public/js/screens/game.js'), /leaks: lifeImmune\?0:ownLeaks\(localLeaks, meP\?\.pendingLp\)/);
   });
 
   /** Feed liveLp a sequence of states, keeping its base like the game screen (lpBaseRef). */

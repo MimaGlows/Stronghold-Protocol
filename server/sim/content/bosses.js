@@ -252,8 +252,8 @@ function branchSpawn(b, tpl, name, phaseIdx, { fallback = null, mods = null, at 
  */
 function summonMods(b, hpRatio = null) {
   const s = b.flags && b.flags.enemyScale;
-  if (!s || typeof s !== 'object') return hpRatio ? { hpMul: hpRatio } : null;
-  const m = { hpMul: (Number.isFinite(s.hpMul) && s.hpMul > 0 ? s.hpMul : 1) * (hpRatio || 1), atkMul: s.atkMul, speedMul: s.speedMul };
+  if (!s || typeof s !== 'object') return b.flags.custom ? {hpMul:hpRatio||1,customSummon:true} : hpRatio ? { hpMul: hpRatio } : null;
+  const m = { hpMul: (Number.isFinite(s.hpMul) && s.hpMul > 0 ? s.hpMul : 1) * (hpRatio || 1), atkMul: s.atkMul, speedMul: s.speedMul, ...(b.flags.custom?{customSummon:true}:{}) };
   if (s.supplyHpMul != null) m.supplyHpMul = s.supplyHpMul;
   return m;
 }

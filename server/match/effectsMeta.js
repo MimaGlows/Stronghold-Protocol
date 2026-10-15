@@ -465,6 +465,8 @@ export function makeCtx(m, ps, source, hook, ev = null) {
     seat: ps.seat,
     name: ps.name,
     get round() { return m.round; },
+    get customConfig() { return m.customConfig; },
+    get playerCount() { return m.order.length; },
     get phase() { return m.phase; },
     modeId: m.modeId,
     difficulty: m.difficulty,

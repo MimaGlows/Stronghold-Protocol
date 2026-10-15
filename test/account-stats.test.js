@@ -11,6 +11,13 @@ import { buildRecord, aggregateStats } from '../shared/stats.js';
 import { startServer } from '../server/index.js';
 import { TestClient } from './helpers/wsClient.js';
 const quiet = { info() {}, warn() {}, error() {} };
+test('startup migration skips replay bodies when every account already has current statistics', () => {
+  const service = Object.create(AccountStats.prototype);
+  service.allProfiles = () => [{ statistics: { v: 1, records: [] } }];
+  service.rawArchive = () => { throw new Error('current statistics must not load full replay tracks'); };
+  service.archive = { get dir() { throw new Error('no legacy migration is needed'); } };
+  assert.doesNotThrow(() => service.migrate());
+});
 function settled(id = randomUUID(), t = 100, pid = 'p') {
   return { ...buildRecord({ victory: true, roundsPassed: 14, modeId: 'mode_single_normal', difficulty: 'NORMAL', durationMs: 1000,
     players: [{ playerId: pid, name: 'same', alive: true, victory: true, roundsPassed: 14, bandId: 'band_amiya', stats: { kills: 17 } }] }, { myId: pid, now: t }), id };

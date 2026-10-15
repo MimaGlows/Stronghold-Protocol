@@ -93,9 +93,10 @@ function fuzzOne(seed, { fake }) {
   return intents;
 }
 
-test('fuzz with FakeBattle: 60 matches of random intents / connection churn / time jumps', () => {
+test('fuzz with FakeBattle: 180 matches of random intents / connection churn / time jumps', () => {
+  // More seeds retain the original intent coverage after the hard cutoff terminates large time jumps.
   let n = 0;
-  for (let seed = 1; seed <= 60; seed++) n += fuzzOne(seed, { fake: true });
+  for (let seed = 1; seed <= 180; seed++) n += fuzzOne(seed, { fake: true });
   assert.ok(n > 10000, `${n} intents`);
 });
 

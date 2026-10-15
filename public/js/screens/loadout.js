@@ -22,7 +22,7 @@
 // with its own 导出 / 导入 / 全部清空.
 // Keyboard: Esc closes, ←/→ move through the (filtered) roster when focus is not in the search field (干员调配 tab).
 
-import { useEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from '../../vendor/hooks.module.js';
 import { html, Icon, MicroLabel, Button, TierChip, TextField, Countdown, Spinner, confirmDialog, hasDeadline, Modal, Fragment } from '../ui/components.js';
 import { Img, RichText, UnitThumb } from '../ui/gameComponents.js';
 import { chessAvatarUrl, chessPortraitUrl, subProfIconUrl, bondIconUrl, moduleTypeIconUrl } from '../ui/assetUrls.js';
@@ -779,9 +779,9 @@ export function LoadoutHost() {
     if (shouldAutoClose(st, phase, inMatch, wasInMatch.current)) closeLoadout();
     wasInMatch.current = inMatch;
   }, [phase, inMatch, st.open]);
-  useEffect(() => {
-    if (st.open) document.documentElement.classList.add('sp-loadout-open');
-    else document.documentElement.classList.remove('sp-loadout-open');
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('sp-loadout-open',st.open);
+    return()=>document.documentElement.classList.remove('sp-loadout-open');
   }, [st.open]);
   if (!st.open) return null;
   return html`<${LoadoutScreen} st=${st} />`;

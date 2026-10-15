@@ -65,7 +65,7 @@ for (const difficulty of ['FUNNY', 'NORMAL', 'HARD', 'ABYSS']) for (const count 
       assert.ok(c.inbox.filter(m => m.t === 'room.state').every(m => m.matching.rules || !m.seats.some(s => guests.some(g => s?.playerId === g.id))));
     }
     const ordinary = await host.waitFor('room.state', m => !m.matching.rules && m.code === room.shareCode);
-    assert.equal(ordinary.seats.filter(Boolean).length, 1); assert.equal(ordinary.seats[0].doctorCode, '0001');
+    assert.equal(ordinary.seats.filter(Boolean).length, 1); assert.equal(ordinary.matchPrivacy,true); assert.equal(ordinary.seats[0].doctorCode, undefined);
     assert.ok(!JSON.stringify(ordinary).includes('matchingOrigin'));
     const p = f.party(guests[0]), seed = f.seed();
     await f.disable(host); assert.equal(f.party(guests[0]), p); assert.equal(f.seed(), seed);

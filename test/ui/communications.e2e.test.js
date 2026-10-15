@@ -123,7 +123,8 @@ test('real coop communication, capture safety, other fields, wheel, spectator, f
     assert.ok(m.recorder.record.communications.every((e) => !e.state && !e.snap));
     stage('replay persistence and random access');
     const entry = { ...m.recorder.ticket(), playerId: bp.playerId };
-    m.recorder.abort();
+    // Interrupted/quit archives intentionally expire in the current account-history policy.
+    m.finish({victory:false,reason:'eliminated'});
     await a.waitForFunction(async (entry) => {
       const r = await (await fetch(`/api/replays/${entry.id}`, { headers: { Authorization: `Bearer ${entry.key}` } })).json();
       return ['ready', 'partial'].includes(r.status);

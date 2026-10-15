@@ -32,6 +32,9 @@
 // Not a test file (node --test runs it as a no-op module when NODE_TEST_CONTEXT is set).
 
 import { startServer } from '../../server/index.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { Match } from '../../server/match/Match.js';
 import { legalTiles, placeClass, tileKey } from '../../server/match/board.js';
 import { planLayout } from '../../server/match/bot.js';
@@ -194,9 +197,10 @@ if (!process.env.NODE_TEST_CONTEXT) {
     }
   }
 
-  const srv = await startServer({ port: Number(process.env.PORT) || 0, host: process.env.HOST || '127.0.0.1', quiet: true, MatchClass: FastMatch });
+  const profileDir=fs.mkdtempSync(path.join(os.tmpdir(),'sp-fast-profiles-'));
+  const srv = await startServer({ port: Number(process.env.PORT) || 0, host: process.env.HOST || '127.0.0.1', quiet: true, MatchClass: FastMatch, profileDir });
   console.log(`fast server on ${srv.url} (timers ×${timerScale}, combat ${combatSpeed}×${startAt ? `, first round ${startAt}` : ''})`);
-  const stop = () => { srv.close().finally(() => process.exit(0)); };
+  const stop = () => { srv.close().finally(() => {fs.rmSync(profileDir,{recursive:true,force:true});process.exit(0);}); };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
 }

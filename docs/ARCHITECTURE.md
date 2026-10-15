@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — a map of the code
 
-本隔离副本额外包含用户授权的[实验匹配模式](MATCHMAKING.md)：`server/matchmaking/`管理大厅好友队伍、匹配调度、普通房间补位和独立限制存储，`public/js/ui/matchmaking.js`提供界面，普通房间及战斗模拟器保持原规则。
+三个统一实例额外包含用户授权的[实验匹配模式](MATCHMAKING.md)：`server/matchmaking/`管理大厅好友队伍、匹配调度、普通房间补位和独立限制存储，`public/js/ui/matchmaking.js`提供界面，普通非匹配对局保持原规则，自订修正通过每局独立数据视图生效，见[统一审计修复](REPAIR-20261015.md)。
 
 For a newcomer who wants to find their way before changing something. This file only maps the code. The contracts are
 in the design document — [DESIGN.md](DESIGN.md) is its index, the current rules are in `docs/design/` (§5 the battle
@@ -27,7 +27,7 @@ effects), [DATA.md](DATA.md) (generated data), [ASSETS.md](ASSETS.md) (art and a
 
 - **The server** is one Node process: plain `node:http` plus `ws`, no framework (`server/index.js` wires
   `server/http/`). It serves the static client, the generated data and the sim's source files, and runs every room and
-  match in memory — rounds, shop, economy, bots, validation. Nothing is written to disk.
+  match in memory — rounds, shop, economy, bots, validation. Rooms and live battles are transient. Durable virtual accounts, preferences, statistics, replay archives and matchmaking restrictions are stored in the installation’s own logs directory.
 - **The browser** loads native ES modules with no bundler and no build step; the libraries are vendored into
   `public/vendor/` by `tools/vendor.mjs` on `npm install`.
 - **The battle simulation** (`server/sim/`) is pure ESM without any Node API, served read-only at `/sim/`. Both sides
@@ -79,7 +79,7 @@ so old imports keep working: `public/js/ui/gameLogic.js` (`public/js/ui/gameLogi
 | path | what |
 |---|---|
 | `server/index.js` | the process entry (`npm start`); `startServer()` wires `server/http/` |
-| `server/http/` | `config.js` (environment), `websocket.js` (sessions, `/ws`), `static.js` (the mounts), `media.js`, `files.js` (MIME, gzip, ETag, ranges), `buildTag.js`, `routes.js` (`/healthz`), `common.js`, `boot.js` (a pending update package first, banner, shutdown) |
+| `server/http/` | `config.js` (environment), `websocket.js` (sessions, `/ws`, permessage-deflate), `static.js` (the mounts, the `~<hash>` asset routes), `media.js`, `files.js` (MIME, brotli / gzip, ETag, ranges), `buildTag.js`, `routes.js` (`/healthz`), `traffic.js` (bytes sent by category and on the WebSocket, `/healthz?traffic=1`), `assetIndex.js` (the content hashes of `public/assets/` and `public/fonts/`, cached in `.cache/asset-hashes.json`), `assetViews.js` (the served `/data/assets.json` and `/data/local-assets.json`: every art URL with its hash segment; ASSETS.md), `common.js`, `boot.js` (a pending update package first, banner, shutdown) |
 | `server/net.js` | sessions and reconnect tokens, rate limits, message validation |
 | `server/lobby.js` | rooms, seats, AI seats, spectators; starts a `Match` |
 | `server/data.js` | loads `data/*.json` once (frozen) |
@@ -133,7 +133,8 @@ data/*.json ──────────┬─▶ server/data.js ────�
                       ├─▶ public/js/data.js ──────────▶ the UI
                       └─▶ public/js/battle/runner.js ─▶ the browser's battles (setSimData)
 data/i18n/en.json ──────▶ public/js/data.js ──────────▶ the English game texts
-public/assets/ ─────────▶ public/js/render/, public/js/audio.js (URLs listed in data/assets.json)
+public/assets/ ─────────▶ public/js/render/, public/js/audio.js (URLs listed in data/assets.json,
+                           served with content-hash segments: server/http/assetViews.js)
 ```
 
 - **Game data.** `tools/build-data.mjs` downloads the official zh_CN tables into `.cache/gamedata/` (or reads them
@@ -200,3 +201,5 @@ DESIGN.md names the file that holds each) and the official source; a rule no sou
 
 
 定制 v0.2.5-mimaglows.1：大厅匹配、房间补位开关、预选盟约加权禁用、分享撤销及匹配隐私规则见 [MATCHMAKING.md](MATCHMAKING.md)。历史实验交付中的70%补位保护及关闭后继续匹配规则已由本版替代。回放定期兼容性检查使用只读 Worker 和文件指纹缓存，主线程提交前复核指纹；启动等待首次索引，失败保留旧报告并重试，关闭清理 Worker。
+
+隔离实验实例还提供[自订模拟、100分钟时限与匹配隐私](CUSTOM-SIMULATION.md)，以每局配置保持普通规则兼容。

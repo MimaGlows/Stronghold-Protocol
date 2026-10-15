@@ -197,6 +197,7 @@ const ITEM_HANDLERS = {
       // piece (0.2.0): its DIY slot is bound to this player's roster (no teammate's shop or slot can hold that operator),
       // so nothing is sent [ASSUMED: the official text names no 自选 case]
       const to = ctx.chessRecord(original)?.diyFor ? null : mostBondMate(ctx, bonds);
+      if(to && ctx.customConfig && ctx.playerCount===6 && ev.item.meta?.customBeaconRound===14){to.grantChess(original);return;}
       if (to) ctx.addEffect({ id: `gift:${ev.item.uid}`, key: 'effect:builtin_gift', hidden: true, battle: false, params: { toPlayerId: to.playerId, chessId: original, bonds } });
     },
   },

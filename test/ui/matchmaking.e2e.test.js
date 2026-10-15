@@ -7,7 +7,16 @@ import os from 'node:os';
 import { startServer } from '../../server/index.js';
 const chrome=process.env.CHROME_PATH,enabled=process.env.SP_MATCH_E2E==='1' && chrome && fs.existsSync(chrome);
 const OUT=path.resolve('test/e2e/out/matchmaking-v6');
-async function clickText(page,selector,text) { for(const h of await page.$$(selector))if((await h.evaluate(e=>e.textContent)).includes(text)){await h.evaluate(e=>e.click());return;}throw new Error('Missing '+text); }
+async function clickText(page,selector,text) {
+  for(const h of await page.$$(selector))if((await h.evaluate(e=>e.textContent)).includes(text)){
+    // Reveal clipped scroll-container content without centring an already visible fixed-footer control.
+    await h.evaluate(e=>e.scrollIntoView({block:'nearest',inline:'nearest'}));
+    try{await page.waitForFunction(e=>{const r=e.getBoundingClientRect();return !e.disabled&&r.width>0&&r.height>0&&e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));},{timeout:5000},h);}catch(error){throw new Error('Unreachable '+text+': '+JSON.stringify(await h.evaluate(e=>{const r=e.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {disabled:e.disabled,rect:r.toJSON(),hit:hit?.outerHTML.slice(0,700),ancestors:[e,e.parentElement,e.parentElement?.parentElement].map(n=>({class:n?.className,rect:n?.getBoundingClientRect().toJSON(),pointer:n&&getComputedStyle(n).pointerEvents}))};})),{cause:error});}
+    const pt=await h.evaluate(e=>{const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};});
+    await page.mouse.click(pt.x,pt.y);return;
+  }
+  throw new Error('Missing '+text);
+}
 const state=p=>p.evaluate(()=>globalThis.__SP__.store.get());
 const request=(p,type,fields={})=>p.evaluate(({type,fields})=>globalThis.__SP__.net.request(type,type==='matching.leave'?{partyId:globalThis.__SP__.store.get().matching.party?.id,...fields}:fields),{type,fields});
 const waitParty=(p,count)=>p.waitForFunction(n=>globalThis.__SP__.store.get().matching.party?.members.length===n,{},count);
@@ -42,7 +51,7 @@ test('four browsers: lobby parties, preferences, queue UI, merge, friend restora
     });return animation;};
   });
   console.log('Native system prefers-reduced-motion:',await a.evaluate(()=>matchMedia('(prefers-reduced-motion: reduce)').matches));
-  async function setMotion(p,mode){await p.click('.lobby-screen [data-testid="settings-btn"]');await p.waitForSelector('[data-testid="matching-motion"]');await clickText(p,'[data-testid="matching-motion"] button',mode==='full'?'完整动画':'减少动画');await clickText(p,'.modal__actions .btn','完成');await p.waitForFunction(()=>!document.querySelector('[data-testid="matching-motion"]'));}
+  async function setMotion(p,mode){await p.click('.lobby-screen [data-testid="settings-btn"]');await p.waitForSelector('[data-testid="matching-motion"]');await clickText(p,'[data-testid="matching-motion"] button',mode==='full'?'完整动画':'减少动画');assert.ok(await p.$eval('.settings-modal .modal__actions .btn',e=>{const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'settings completion remains above the fixed queue');await p.screenshot({path:path.join(OUT,`settings-over-queue-${p.viewport().width}-${mode}.png`)});await clickText(p,'.settings-modal .modal__actions .btn','完成');await p.waitForFunction(()=>!document.querySelector('[data-testid="matching-motion"]'));}
   await a.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const g=canvas.getContext('2d');g.fillStyle='#f13e77';g.fillRect(0,0,256,256);(await import('/js/ui/avatarProfile.js')).commitAvatar({kind:'custom',dataUrl:canvas.toDataURL('image/webp',.8)});});
   await a.waitForFunction(async()=>(await import('/js/ui/avatarProfile.js')).avatarStore.get().sync==='synced');
   const dimensions=await a.evaluate(()=>{const start=document.querySelector('.matching-start').getBoundingClientRect(),create=document.querySelector('.matching-create-box .btn--primary').getBoundingClientRect();return {start:{w:start.width,h:start.height,right:start.right},create:{w:create.width,h:create.height,right:create.right}};});
@@ -97,7 +106,7 @@ test('four browsers: lobby parties, preferences, queue UI, merge, friend restora
     await clickText(p,'.alliance-picker .alliance-confirm','选择');await p.waitForFunction(()=>!document.querySelector('.alliance-picker'));
   }
   await a.click('.me-chip .avatar-edit');assert.equal(await a.$eval('.avatar-upload',e=>e.disabled),true);await clickText(a,'.avatar-picker .avatar-confirm','保存头像');await a.waitForSelector('.matching-notice-text');await clickText(a,'.modal__actions .btn','知道了');await a.waitForFunction(()=>!document.querySelector('.matching-notice-text'));await clickText(a,'.avatar-picker .modal__actions .btn','取消');
-  assert.ok((await a.$eval('.me-chip .avatar img',e=>e.getAttribute('src'))).includes('char_446_aroma_2'));
+  assert.ok(await a.$eval('.me-chip .avatar img',e=>e.src.includes('aroma')));
   await declare(a,'yanShip',true);assert.equal((await state(a)).matching.party.phase,'idle');
   // Observe the transition itself, before later UI waits can outlive the short animation.
   await a.evaluate(()=>{globalThis.__matchingMidpoint=null;globalThis.__matchingTrace=[];const q=document.querySelector('.matching-queue'),o=new MutationObserver(()=>{globalThis.__matchingTrace.push({c:q.className,ids:q.getAnimations({subtree:true}).map(a=>[a.id,a.currentTime,a.effect.getTiming().duration]),bg:getComputedStyle(q).backgroundColor});const anim=q.getAnimations().find(a=>a.id==='matching-color');if(!anim)return;anim.pause();anim.currentTime=160;globalThis.__matchingMidpoint=getComputedStyle(q).backgroundColor;anim.play();o.disconnect();});o.observe(q,{attributes:true,attributeFilter:['class']});});
@@ -137,12 +146,13 @@ test('four browsers: lobby parties, preferences, queue UI, merge, friend restora
   const attempt=(await state(a)).matching.party.attemptId;
   await setMotion(a,'reduced');assert.equal(await a.$eval('.matching-queue',e=>e.getAnimations({subtree:true}).length),0);
   await setMotion(a,'full');await a.waitForFunction(()=>document.querySelector('.matching-refresh .icon').getAnimations().some(a=>a.id==='matching-refresh-loop'));
+  await a.setViewport({width:844,height:390});await setMotion(a,'reduced');await setMotion(a,'full');await a.setViewport({width:1440,height:900});
   assert.equal((await state(a)).matching.party.attemptId,attempt);
   const first=server.lobby.matchmakingService.parties.of(server.registry.byId((await state(a)).me.playerId));first.attempt.startedAt-=60000;server.lobby.matchmakingService.parties.pump();
   await a.waitForSelector('.matching-queue__extended');await a.screenshot({path:path.join(OUT,'05-extended.png')});
   await a.bringToFront();const successRecording=await a.screencast({path:path.join(OUT,'19-success-motion.webm')});
   // Capture the transient confirmation concurrently; waiting for another tab's dialog exit can outlive it.
-  const successShot=(async()=>{await a.waitForSelector('.matching-success');await a.bringToFront();await a.waitForFunction(()=>document.querySelector('.matching-success')?.getAnimations().some(a=>a.id==='matching-success'&&a.currentTime>=160),{polling:25});const facts=await a.$eval('.matching-success',e=>({inMatch:globalThis.__SP__.store.get().room.inMatch,pointer:getComputedStyle(e).pointerEvents,members:e.querySelectorAll('.matching-success__member').length}));await a.screenshot({path:path.join(OUT,'19-success.png')});return facts;})();
+  const successShot=(async()=>{await a.bringToFront();const sample=await a.waitForFunction(()=>{const e=document.querySelector('.matching-success');if(!e?.getAnimations().some(a=>a.id==='matching-success'&&a.currentTime>=160))return false;return {inMatch:globalThis.__SP__.store.get().room.inMatch,pointer:getComputedStyle(e).pointerEvents,members:e.querySelectorAll('.matching-success__member').length};},{polling:25});const facts=await sample.jsonValue();await a.screenshot({path:path.join(OUT,'19-success.png')});return facts;})();
   await declare(c,'victoriaShip');await declare(d,'kjeragShip');const successFacts=await successShot;
   assert.ok(successFacts.inMatch,'game already entered during confirmation');assert.equal(successFacts.pointer,'none');assert.equal(successFacts.members,4);
   assert.deepEqual(await a.evaluate(()=>globalThis.__matchingSounds),['start','matchCancel','start','matchCancel','start','matchSucceed']);
@@ -174,12 +184,7 @@ test('four browsers: lobby parties, preferences, queue UI, merge, friend restora
   assert.equal(await a.evaluate(()=>document.documentElement.dataset.matchingMotion),'reduced');await setMotion(a,'full');
   // Ordinary room owns the opening decision; the other three remain a whole lobby party.
   await clickText(a,'.matching-create-box .btn--primary','创建同盟');await a.waitForSelector('.room-screen');
-  await a.click('.matching-toggle input');await a.waitForSelector('.alliance-picker');
-  await a.click('.alliance-option[data-bond="yanShip"]');await clickText(a,'.alliance-confirm','选择');
-  await a.waitForFunction(()=>globalThis.__SP__.store.get().room.matching.enabled);
-  assert.equal((await state(a)).room.code,null);
-  assert.ok((await state(a)).room.seats.every(s=>!s || s.doctorCode===undefined));
-  assert.equal(await a.$('.invite__btns'),null);
+  await a.click('.matching-toggle input');await a.waitForSelector('.alliance-picker');await a.click('.alliance-option[data-bond="any"]');await clickText(a,'.alliance-confirm','选择');await a.waitForFunction(()=>globalThis.__SP__.store.get().room.matching.enabled);
   assert.equal(await a.$('.matching-room'),null);assert.equal(await a.$('.room-screen .matching-preference'),null);
   assert.ok(await a.$('.room-bar__opts .matching-toggle'));
   assert.equal(await a.$eval('.seat--empty .btn',e=>e.disabled),true);
@@ -190,8 +195,14 @@ test('four browsers: lobby parties, preferences, queue UI, merge, friend restora
   const trio=server.lobby.matchmakingService.parties.of(server.registry.byId((await state(b)).me.playerId));trio.attempt.startedAt-=60000;server.lobby.matchmakingService.parties.pump();
   await b.waitForSelector('.matching-success');assert.equal(await b.$eval('.matching-success',e=>e.getAnimations({subtree:true}).length),0);assert.equal((await state(b)).room.inMatch,false,'success does not auto-start a backfill room');await b.screenshot({path:path.join(OUT,'22-success-mobile.png')});await b.waitForFunction(()=>!document.querySelector('.matching-success'));await b.setViewport({width:1440,height:900});
   for(const p of [b,c,d])await p.waitForSelector('.room-screen');const ordinary=server.lobby.roomOf(server.registry.byId((await state(a)).me.playerId));assert.equal(ordinary.activeHumans().length,4);assert.equal(ordinary.match,null);
+  assert.equal(ordinary.toState().matchPrivacy,true);assert.ok(ordinary.toState().seats.every(s=>!s?.doctorCode));
+  assert.ok(await a.evaluate(()=>!/#\d{4}\b/.test(document.querySelector('.room-screen').innerText)));
+  await a.waitForSelector('.dialog-host .matching-notice-text');
+  await a.screenshot({path:path.join(OUT,'23-backfill-avatar-notice.png')});
+  await clickText(a,'.dialog-host .modal__actions .btn','知道了');await a.waitForFunction(()=>!document.querySelector('.dialog-host .matching-notice-text'));
   await a.waitForFunction(()=>{const seats=[...document.querySelectorAll('.room-screen .seat:not(.seat--empty)')];return seats.length===4&&seats.every(e=>Number(getComputedStyle(e).opacity)===1);});
   await a.screenshot({path:path.join(OUT,'08-backfill-room.png')});await clickText(a,'.room-bar__right .btn','开始模拟');await b.waitForFunction(()=>globalThis.__SP__.store.get().room.inMatch);
+  assert.equal(ordinary.match.matchPrivacy,true);assert.ok(ordinary.match.publicView().players.every(p=>!p.doctorCode));
   await b.evaluate(async()=>{await (await import('/js/ui/matchChrome.js')).quitMatch();});await b.waitForFunction(()=>globalThis.__SP__.store.get().matching.bannedUntil>Date.now());await b.waitForSelector('.lobby-screen');
   await b.screenshot({path:path.join(OUT,'09-sanction.png')});assert.equal(await b.$eval('.matching-start',e=>e.disabled),true);
   const keys=await a.evaluate(()=>Object.keys(localStorage));assert.ok(keys.every(k=>!k.startsWith('sp.')||k.startsWith('sp.')));

@@ -6,6 +6,7 @@
 // Installed on Match.prototype by server/match/Match.js (a method container: never instantiated; `this` is the match).
 
 import { PHASE, GEO } from '../../../shared/constants.js';
+import { awardFate } from '../custom.js';
 import { createRng, deriveSeed } from '../../sim/rng.js';
 import { buildBossWave, bountySpawns } from '../waves.js';
 import { pairPlayers, bossPoolHp, SharedBossPool, CreditPool, hiddenEligible, BOSS_HIT_STEPS } from '../finalAssault.js';
@@ -37,20 +38,25 @@ const BOSS_LP_PER_GS = 1;
 
 export class MatchBoss {
   startFinalAssault(hidden) {
+    if(this.ended||this.disposed)return;
+    this.setDeadline(0);
     const alive = this.alivePlayers();
     if (!alive.length) { this.finish({ victory: false, reason: 'eliminated' }); return; }
     this.phase = hidden ? PHASE.HIDDEN_CORE : PHASE.FINAL_ASSAULT;
     this.lastResults = new Map();
+    if(this.customConfig){this.customCombatPlayers=alive.map(p=>p.playerId);this.customCombatLives=Object.fromEntries(alive.map(p=>[p.playerId,p.lp]));this.customCombatLivesRound=this.round;}
     if (!hidden) {
-      this.teamLp = alive.reduce((s, p) => s + Math.max(0, p.lp), 0);
+      this.teamLp = alive.reduce((s, p) => s + (this.customConfig?.tourist&&p.lp<=0?-10:Math.max(0,p.lp)), 0);
       for (const ps of alive) ps.lpAtFinal = Math.max(0, ps.lp);
+      if(this.customConfig&&this.teamLp<=0){this.finish({victory:false,reason:'defeat'});return;}
     }
     const bossId = hidden ? this.hiddenBossId : this.bossId;
     // BOSS_HIT tickers ("对敌方领袖造成的伤害超过20% / 50% / 80%"): the player's damage to THIS leader over its pool —
     // the pool's own per-player tally, one pool per boss round. stats.bossDamage (the result's 领袖伤害) adds up both
     // rounds, so it would credit the Final Assault's damage to the hidden leader ("隐藏boss还没打就出了50%播报").
     const hitSteps = new Map();
-    const pool = new SharedBossPool(bossPoolHp(this.gd, bossId, alive.length), {
+    const poolHp = this.customConfig ? this.gd.bossPoolHp(bossId, alive.length) : bossPoolHp(this.gd, bossId, alive.length);
+    const pool = new SharedBossPool(poolHp, {
       onHit: (pid, dmg) => {
         const ps = this.players.get(pid);
         if (!ps) return;
@@ -126,6 +132,7 @@ export class MatchBoss {
     const team = this.order.filter((p) => !p.left);
     this.bossOvertimeStartReal = team.length > 1 && team.some((p) => p.isBot)
       ? this.gd.bossOvertimeAfterReal : (levelTime || this.gd.bossOvertimeAfterReal);
+    if(this.customConfig && team.some(p=>p.isBot))this.bossOvertimeStartReal*=this.customConfig.combat/100;
     this.deadline = this.sched.instant || !levelTime ? 0 : onClock(levelTime);
     this.overtimeAt = this.sched.instant ? 0 : onClock(this.bossOvertimeStartReal);
     if (this.clientCombat) { this._startFinalClient(hidden); return; }
@@ -274,7 +281,7 @@ export class MatchBoss {
     f.credit = credit;
     f.lpCum = 0;
     try {
-      battle.on('enemyLeak', (ctx) => { const e = ctx && ctx.enemy; if (e) this._creditLp(f, Number.isFinite(e.lpr) && e.lpr >= 0 ? e.lpr : 1); }, { priority: -1000, owner: 'match' });
+      battle.on('enemyLeak', (ctx) => { const e = ctx && ctx.enemy; if (e) this._creditLp(f, this.customConfig?.whitebird ? 0 : Number.isFinite(e.lpr) && e.lpr >= 0 ? e.lpr : 1); }, { priority: -1000, owner: 'match' });
       battle.on('lpLoss', (ctx) => this._creditLp(f, ctx && ctx.amount), { priority: -1000, owner: 'match' });
     } catch (e) { this.reportError('boss leak hook', e); }
     if (!this.pacer) this.pacer = new HeadlessPacer(this);
@@ -425,6 +432,7 @@ export class MatchBoss {
 
   _bossLeak(enemy) {
     if (!enemy || this.teamLp == null) return;
+    if(this.customConfig?.whitebird)return;
     // lifePointReduce from data: 0 for harmless enemies (e.g. 装置 / unharmful escorts), 1 when absent
     const lpr = Number.isFinite(enemy.lpr) && enemy.lpr >= 0 ? enemy.lpr : 1;
     this._teamLpLoss(lpr);
@@ -509,6 +517,9 @@ export class MatchBoss {
   /** Every boss field is over: stats, bounties, then the Hidden Core or RESULT. */
   _finishFinal(hidden, resultOf) {
     if (this.phase !== (hidden ? PHASE.HIDDEN_CORE : PHASE.FINAL_ASSAULT)) return;
+    const round=this.round, phase=this.phase;
+    if(this._settledBossRound===round)return;
+    this._settledBossRound=round;
     this._stopClientCombat();
     // the end condition the server registered first decides (client-side combat: _endFinal — pool 0 → victory, team LP 0
     // → defeat); a boss field's final result may never turn a defeat into a victory (user playtest #6 item 5)
@@ -533,19 +544,22 @@ export class MatchBoss {
           // of the player's own — "下场作战" — so a perfect-payout card pays as after a normal one]
           const perfect = victory && !res.synthetic && pp.perfect === true && !(pp.leaked || []).some((l) => l && l.counted !== false)
             && this._bossLeaksAgree(f, res, pid);
+          if(this.customConfig?.fateWager){pp.perfect=perfect;pp.synthetic=!!res.synthetic||res.errors>0;}
           this._settleBossBounties(ps, pp, perfect);
         }
         if (pp && ps) this.dispatch(ps, 'onBattleResult', { result: pp, lpLoss: 0, perfect: !!pp.perfect, boss: true });
       }
     }
     this._syncTeamLp();
+    awardFate(this,this.customCombatPlayers,victory);
     this.deadline = 0;
     this.overtimeAt = 0;
     this.markPublic();
     this.runner = null;
     if (!hidden) {
-      const eligible = victory && !!this.hiddenBossId && hiddenEligible(this.gd, { layerSum: this.hiddenLayerSum, teamLp: this.teamLp });
+      const eligible = victory && round===this.gd.bossRound && !this.hiddenReached && !!this.hiddenBossId && hiddenEligible(this.gd, { layerSum: this.hiddenLayerSum, teamLp: this.teamLp });
       this.later(this.scaled(DELAYS.SETTLE), () => {
+        if(this.ended||this.disposed||this.round!==round||this.phase!==phase)return;
         if (eligible) {
           this.hiddenReached = true;
           this.bossPool = null;
@@ -556,7 +570,11 @@ export class MatchBoss {
         }
       });
     } else {
-      this.later(this.scaled(DELAYS.SETTLE), () => this.finish({ victory: true, hiddenCleared: victory, reason: 'victory' }));
+      this.later(this.scaled(DELAYS.SETTLE), () => {
+        if(this.ended||this.disposed||this.round!==round||this.phase!==phase)return;
+        // Ordinary modes retain their main-boss victory after an optional core failure.
+        this.finish({ victory:this.customConfig?victory:true, hiddenCleared: victory, reason: !this.customConfig||victory?'victory':'defeat' });
+      });
     }
   }
 }

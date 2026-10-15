@@ -35,7 +35,7 @@ process.on('exit', () => {
 process.env.SP_COMBAT = 'client'; process.env.SP_VERIFY = 'off'; process.env.TRUST_PROXY = 'auto';
 let server;
 for (let port = 3002; port <= 65535; port++) {
-  try { server = await startServer({ port, host: '127.0.0.1' }); break; }
+  try { server = await startServer({ port, host: '127.0.0.1', maintenance: process.env.SP_MAINTENANCE === '1' }); break; }
   catch (error) { if (error.code !== 'EADDRINUSE') throw error; }
 }
 if (!server) throw new Error('No free experimental port');
@@ -63,9 +63,11 @@ const control = net.createServer((socket) => {
     if (!text.includes('\n')) return;
     let request;
     try { request = JSON.parse(text); } catch { socket.destroy(); return; }
-    if (request.secret !== secret || !['status', 'stop'].includes(request.action)) { socket.destroy(); return; }
-    socket.end(JSON.stringify({ ok: true, pid: process.pid, root, url: instance.url }) + '\n');
-    if (request.action === 'stop') socket.on('close', () => { void close(); });
+    if (request.secret !== secret || !['status', 'stop', 'stopIdle', 'drain', 'resume'].includes(request.action)) { socket.destroy(); return; }
+    if(request.action==='drain'||request.action==='resume')server.lobby.setMaintenance(request.action==='drain');
+    const stats=server.lobby.stats(),idle=stats.matches===0;
+    socket.end(JSON.stringify({ ok: request.action!=='stopIdle'||idle, capabilities:['drain','resume'],pid: process.pid, root, url: instance.url,...stats }) + '\n');
+    if (request.action === 'stop'||request.action==='stopIdle'&&idle) void close();
   });
   socket.on('error', () => {});
 });

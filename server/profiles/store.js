@@ -74,7 +74,7 @@ export class ProfileStore {
     const ended = typeof result.victory === 'boolean';
     if (!ended && latest.history.some((e) => e.id === ticket.id)) return latest;
     const entry = { ...ticket, playerId, modeId: result.modeId, difficulty: result.difficulty, ended, ...(ended ? { endedAt: Date.now() } : {}), participants: result.players.map(({ name, doctorCode, isBot }) => ({ name, doctorCode, isBot: !!isBot })), names: result.players.map((p) => p.name),
-      ...(ended ? { result: { victory: result.victory, roundsPassed: result.roundsPassed, players: result.players.map(({ playerId, name }) => ({ playerId, name })) } } : {}) };
+      ...(ended ? { result: { victory: result.victory, roundsPassed: result.roundsPassed, ...(result.matchPrivacy?{matchPrivacy:true}:{}), players: result.players.map(({ playerId, name }) => ({ playerId, name })) } } : {}) };
     latest.history = [entry, ...(latest.history || []).filter((e) => e.id !== ticket.id)].slice(0, 200);
     this.save(latest); return latest;
   }

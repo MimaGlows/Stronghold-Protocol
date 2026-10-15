@@ -56,8 +56,9 @@ export class MatchWatch {
     if (f) {
       // 最终攻势 / 隐秘核心: "两名参与者会处于同一个战场，但无法查看另一组队友的战场情况" — a fighting player sees its own
       // boss field only (eliminated / departed players spectate freely)
-      const own = this.fieldOf(ps);
-      if ((f.kind === 'boss' || f.kind === 'hidden') && own && own !== f.fieldId) return fail(ERR.BAD_TARGET, 'other group hidden');
+      const own = ps.alive&&!ps.spectator?this.fields.find(x=>x.players.includes(ps.playerId)):null;
+      if ((f.kind === 'boss' || f.kind === 'hidden') && own && own !== f) return fail(ERR.BAD_TARGET, 'other group hidden');
+      if(f.kind==='normal' && own && own!==f && own.live)return fail(ERR.WRONG_PHASE,'own battle running');
       this.watchers.set(ps.playerId, fieldId);
       this._watchPrefSet(ps, f, playerId);
       this._sendField(ps.playerId, fieldId);
@@ -227,7 +228,9 @@ export class MatchWatch {
     if (f) {
       let meta;
       try { meta = f.battle.fieldMeta(); } catch (e) { this.reportError('fieldMeta', e); return; }
-      this.sendTo(playerId, { t: 'm.field', ...meta, fieldId: f.fieldId, kind: f.kind, live: !!f.live });
+      const inputs=f.battle.opts?.players||[];
+      const sides=Object.fromEntries(f.players.map((id,i)=>{const input=inputs.find(p=>p.playerId===id);return [id,input?(input.side==='R'||Number(input.colOffset)>=8?'R':'L'):i===1?'R':'L'];}));
+      this.sendTo(playerId, { t: 'm.field', ...meta, fieldId: f.fieldId, kind: f.kind, players:f.players.slice(),sides,live: !!f.live,...(this.customConfig?{snapshotHz:this.opts.customSnapshotHz||20}:{}) });
       try { this.sendTo(playerId, snapFrame(f.fieldId, f.battle.snapshot())); } catch (e) { this.reportError('snapshot', e); }
       return;
     }

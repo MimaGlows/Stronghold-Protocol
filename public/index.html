@@ -12,9 +12,9 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="卫戍协议" />
+  <meta name="apple-mobile-web-app-title" content="优化版卫戍" />
   <meta name="description" content="卫戍协议：盟约 · 网页联机复刻（非官方同人作品）" />
-  <title>卫戍协议：盟约 · 实验匹配版</title>
+  <title>优化版卫戍</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/icons/favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="icon" href="/icons/favicon-16.png" type="image/png" sizes="16x16" />
@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="/css/screens/title.css" />
   <link rel="stylesheet" href="/css/screens/lobby.css" />
   <link rel="stylesheet" href="/css/screens/room.css" />
+  <link rel="stylesheet" href="/css/custom.css" />
   <link rel="stylesheet" href="/css/screens/game.css" />
   <link rel="stylesheet" href="/css/screens/game-shop.css" />
   <link rel="stylesheet" href="/css/screens/game-panels.css" />
@@ -106,6 +107,7 @@
       if (/specifier|resolve|import|module/i.test(String(ev && ev.message))) window.__spBootFail('load');
     });
   </script>
+  <script src="/instance.js"></script>
   <script type="module" src="/js/main.js" onerror="window.__spBootFail && window.__spBootFail('load')"></script>
   <script nomodule>window.__spBootFail && window.__spBootFail('old');</script>
   <script>

@@ -1063,9 +1063,11 @@ describe('screen helpers', () => {
 
   test('lobby: normalizeCode / parseRoomParam / difficultyInfo', async () => {
     const { normalizeCode, parseRoomParam, difficultyInfo, MODE_TEXT } = await mod('screens/lobby.js');
-    assert.equal(normalizeCode('ab-c d9'), 'ABCD');
+    assert.equal(normalizeCode('ab-c d9'), 'ABCD9');
     assert.equal(normalizeCode('http://192.168.1.2:3000/?room=wxyz'), 'WXYZ');
     assert.equal(normalizeCode(undefined), '');
+    assert.equal(normalizeCode('https://example.com/?room=ABCDE'),'ABCDE');
+
     assert.equal(parseRoomParam('?room=abcd'), 'ABCD');
     assert.equal(parseRoomParam('?x=1&room=ABCDEF'), 'ABCDEF');
     assert.equal(parseRoomParam('?room=ABCDEFG'), null);
@@ -1092,7 +1094,7 @@ describe('screen helpers', () => {
     const { codeArg, normalizeCode } = await mod('screens/lobby.js');
     // a DOM element stringifies to "[object HTMLElement]" — the shape that caused the bug
     const element = { toString: () => '[object HTMLElement]' };
-    assert.equal(normalizeCode(element), 'OBJE', 'the old bug: the element normalises into a fake 4-letter code');
+    assert.equal(normalizeCode(element), 'OBJEC', 'the old bug: the element normalises into a fake 4-letter code');
     assert.equal(codeArg(element, 'NJBU'), 'NJBU', 'a non-string argument falls back to the input field');
     // plain event-like objects and other non-strings behave the same
     for (const weird of [{}, [], 42, true, null, undefined, Symbol('x'), () => {}]) {
@@ -1104,7 +1106,7 @@ describe('screen helpers', () => {
     assert.equal(codeArg(element, ''), null);
     assert.equal(codeArg(element, 'AB'), null);
     assert.equal(codeArg(undefined, undefined), null);
-    assert.equal(codeArg('ZZZ QQQ', ''), 'ZZZQ', 'a real string is still truncated to ROOM_CODE_LEN');
+    assert.equal(codeArg('ZZZ QQQ', ''), 'ZZZQQ', 'a real string is truncated to the five-character custom room limit');
   });
 
   test('lobby: battlefield note per difficulty (标准 fixed 战场#01, 险境 8 / 绝境·终极 7 random) matches config.json modes[].stages', async () => {

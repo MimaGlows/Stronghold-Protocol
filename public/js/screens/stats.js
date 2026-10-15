@@ -166,8 +166,8 @@ function HistoryRow({ rec, gd, onOpen }) {
       tabIndex=${view ? 0 : undefined}
       onClick=${view ? open : undefined} onKeyDown=${view ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } } : undefined}>
     <td class="st-t">${dateTime(rec.t)}</td>
-    <td>${difficultyName(rec.difficulty)}</td>
-    <td>${rec.roomMode === 'solo' ? t('单人') : rec.roomMode === 'coop' ? t('同盟') : '—'}</td>
+    <td>${difficultyName(rec.difficulty)}${rec.roomMode==='custom'?(Number.isFinite(rec.customEvaluation?.score)?`（${rec.customEvaluation.score}）`:html` <small class="t-dim">${t('难度系数信息缺失')}</small>`):''}</td>
+    <td>${rec.roomMode === 'solo' ? t('单人') : rec.roomMode === 'coop' ? t('同盟') : rec.roomMode==='custom'?t('自定'):'—'}</td>
     <td><span class="st-band">${band ? html`<${BandIcon} bandId=${band.bandId} size="xs" />${band.name}` : self?.bandId || '—'}</span></td>
     <td class="st-res">${quit ? html`<span class="t-quit">${t('中途退出')}</span>` : html`<span class=${won ? 't-win' : 't-lose'}>${won ? t('胜') : t('负')}</span>`}
       ${!counted ? html`<em class="st-chip">${t('不计入统计')}</em>` : null}

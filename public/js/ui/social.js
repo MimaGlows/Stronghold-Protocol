@@ -1,3 +1,4 @@
+import { instanceKey } from '../instance.js';
 import { useEffect, useLayoutEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { createStore, store, useStore, loadPref, savePref } from '../store.js';
 import { net } from '../net.js';
@@ -14,6 +15,7 @@ import { useMatchingPrivacy } from './matchingIdentity.js';
 import { showMatchingAdmissionError } from './matchingFeedback.js';
 import { useSettings } from './settings.js';
 import { matchingAnimate } from './matchingMotion.js';
+import { confirmRoomTransition } from './roomTransition.js';
 
 const empty = () => ({ owner: null, online: false, ready: false, open: false, friends: [], recent: [], avatars: {}, invites: [], search: null, truncated: false, query: '', code: '', error: '', notificationHint: '', notifications: !!loadPref('inviteNotifications', true) });
 export function socialSearchQuery(name, code) {
@@ -43,7 +45,7 @@ const current = (owner) => owner === socialStore.get().owner && owner === doctor
 export async function socialAction(type, fields = {}) {
   const owner = socialStore.get().owner;
   if (!current(owner) || net.status !== 'online') return false;
-  try { await net.request(type, fields); return current(owner); }
+    try { if(['social.join','social.spectate'].includes(type)||(['social.inviteRespond','matching.inviteRespond'].includes(type)&&fields.accept)){const transition=await confirmRoomTransition();if(transition===null)return false;fields={...fields,...transition};}await net.request(type, fields); return current(owner); }
   catch (err) { if (current(owner) && !showMatchingAdmissionError(err)) toast(t(err.detail || '好友操作失败，请重试'), 'warn'); return false; }
 }
 async function syncSocial() {
@@ -89,6 +91,7 @@ export async function enableInviteNotifications() {
   socialStore.set({ notifications: enabled, notificationHint: enabled ? t('邀请系统通知已启用；操作系统需允许 Chrome 通知') : notificationReason(permission) });
 }
 export function inviteNotificationText(invite) {
+  if(invite.mode==='custom')return t('{name}邀请你加入【{difficulty}】【自定房间：{roomName}】',{name:doctorIdentity(invite.from)?.name||invite.from,difficulty:t(DIFFICULTY_NAMES[invite.difficulty]),roomName:invite.roomName});
   return t('{name}邀请你加入【{difficulty}】【{destination}】',{name:doctorIdentity(invite.from)?.name || invite.from,difficulty:t(DIFFICULTY_NAMES[invite.difficulty] || invite.difficulty),destination:invite.kind==='matching' ? t('匹配队列') : t('房间')});
 }
 export function notifyInvite(invite, win = globalThis) {
@@ -116,7 +119,7 @@ export function notifyInvite(invite, win = globalThis) {
 }
 export function installSocial() {
   globalThis.addEventListener?.('storage', (event) => {
-    if (event.key !== 'sp.pref.inviteNotifications') return;
+    if (event.key !== instanceKey('pref.inviteNotifications')) return;
     let enabled = false; try { enabled = JSON.parse(event.newValue) === true; } catch { /* cleared or invalid device preference */ }
     socialStore.set({ notifications: enabled }); if (!enabled) closeNotifications();
   });
@@ -225,7 +228,7 @@ export function FriendsDrawer({ visible }) {
   const room = useStore((value) => value.room), me = useStore((value) => value.me.playerId);
   const party = useStore((value) => value.matching.party);
   const canMatchInvite = !room && (!party || (['idle', 'searching', 'extended'].includes(party.phase) && party.leaderId === me));
-  const canInvite = room?.mode === 'coop' && !room.inMatch && (!room.matching || room.matching.phase === 'idle') && room.seats?.some((seat) => seat?.playerId === me);
+  const canInvite = ['coop','custom'].includes(room?.mode) && !room.inMatch && (!room.matching || room.matching.phase === 'idle') && room.seats?.some((seat) => seat?.playerId === me);
   useData('bands');
   if (!visible) return null;
   const search = (event) => {

@@ -254,6 +254,8 @@ export class MatchPhases {
   }
 
   startRound(r) {
+    if(this.ended||this.disposed)return;
+    if(this.customConfig?.extraRounds && (r<1||r>19||r<this.round))return;
     this.phase = PHASE.ROUND_START;
     this.round = r;
     this.fields = [];
@@ -268,13 +270,16 @@ export class MatchPhases {
     // round start: its recompute() checks the board on the field the player deploys on this round (deployFieldOf reads
     // the boss pairing), so R14 → R15 never re-checks a boss-field board against the normal field (user playtest #5
     // item 7). rngWaves is used only here, so the order leaves every random stream unchanged.
-    const isBoss = r === this.gd.bossRound || r === this.gd.hiddenRound;
+    const isBoss = this.customConfig?.extraRounds ? r===14 || r===19 || (r===15 && this.hiddenReached) : r === this.gd.bossRound || r === this.gd.hiddenRound;
     if (isBoss) {
       this._planBossWaves();
     } else {
       this.wave = buildNormalWave(this.gd, this.rngWaves, this.factions, r);
     }
     for (const ps of alive) ps.startRound(r);
+    if(this.customConfig && this.order.length===6 && [10,12,14].includes(r)) {
+      this.customBeaconRounds ||= new Set();if(!this.customBeaconRounds.has(r)){this.customBeaconRounds.add(r);for(const ps of alive)ps.acquireItem('chess_item_5_04_e_a',{source:'system',system:true,customBeaconRound:r});}
+    }
     for (const ps of alive) this.dispatch(ps, 'onRoundStart', { round: r });
     // an eliminated player's pending 信标 gift still goes to its teammate (effects flagged afterElimination; GitHub #86)
     for (const ps of this.order) {
@@ -292,6 +297,7 @@ export class MatchPhases {
   /** Stable per-match pairs and their templates, generated before the prep preview / board validation. */
   _planBossWaves() {
     const r = this.round;
+    if (this.customConfig?.extraRounds && r===19) this.bossId=this.extraBossId;
     const bossId = r === this.gd.hiddenRound && r !== this.gd.bossRound ? this.hiddenBossId : this.bossId;
     // Pairing uses an independent seeded draw, consuming no shop, wave, draft or battle randomness.
     const groups = pairPlayers(this.alivePlayers(), createRng(deriveSeed(this.seed, 'boss-pairs')), this.bossPairs);

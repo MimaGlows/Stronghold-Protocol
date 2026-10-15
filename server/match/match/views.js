@@ -73,6 +73,8 @@ export class MatchViews {
       difficulty: this.difficulty,
       stageId: this.stageId,
       setupRevision: this.setupRevision,
+      canRerollSetup:!this.customConfig&&!this.matchPrivacy&&!this.matchingPreferences&&this.mode!=='matching',
+      lifePreview:{cap:this.gd.lpCapPerRound,immune:!!this.customConfig?.whitebird},
       rerollVote: this.setupVote ? {
         id: this.setupVote.id,
         proposerId: this.setupVote.proposerId,
@@ -372,7 +374,8 @@ export class MatchViews {
     try { nextEnemies = this.nextEnemiesFor(ps); } catch (e) { this.reportError('nextEnemies', e); }
     // the scouted player's effects column (策略 / 机变 / 悬赏 …), display-ready (user playtest #2: while scouting, the
     // right column shows the watched player's effects, not one's own)
-    const meta = { t: 'm.field', fieldId: `n:${ps.playerId}`, kind: 'normal', rect: { ...GEO.NORMAL_RECT }, stageId: this.stageId, units, effects: ps.effectsView(), prep: true, nextEnemies };
+    const effects=ps.effectsView().filter(e=>!this.customConfig?.hiddenWar||e.iconKind!=='band');
+    const meta = { t: 'm.field', fieldId: `n:${ps.playerId}`, kind: 'normal', rect: { ...GEO.NORMAL_RECT }, stageId: this.stageId, units, effects, prep: true, nextEnemies };
     // 最终攻势 / 隐秘核心 prep: the pieces stand on the player's half of the boss field — the scout shows them there (rows
     // − 7, the right half mirrored with RIGHT ↔ LEFT: finalAssault.js bossFieldPlacement, as the own prep view), with the
     // round's leader at its spawn tile (nextEnemies `start`), framed by the boss-field prep camera of the player's side

@@ -39,7 +39,7 @@ export function MatchingAccount({ iconOnly = false }) {
       ${iconOnly ? html`<${GIcon} name="shield" class="btn__icon" />` : html`${t('匹配黑名单')} (${matching.blocks.length}/20)`}<//>
     <${MatchingModal} open=${open} title=${t('黑名单管理')} micro="PERSONNEL EXCLUSION" class="matching-blacklist-modal" onClose=${() => setOpen(false)} actions=${html`<${Button} onClick=${() => setOpen(false)}>${t('关闭')}<//>`}>
       <p>${t('任一方拉黑后，双方无法进入同一匹配对局。')}</p>
-      ${matching.blocks.length ? matching.blocks.map((id) => html`<div class="matching-block" key=${id}><span>${matching.restricted ? id.split('#')[0] : id}</span><${Button} size="sm" onClick=${() => request('matching.unblock', { identity: id })}>${t('解除拉黑')}<//></div>`) : html`<p>${t('暂无匹配黑名单')}</p>`}
+      ${matching.blocks.length ? matching.blocks.map((id) => html`<div class="matching-block" key=${id}><span>${matching.blockLabels?.[id] || id.split('#')[0]}</span><${Button} size="sm" onClick=${() => request('matching.unblock', { identity: id })}>${t('解除拉黑')}<//></div>`) : html`<p>${t('暂无匹配黑名单')}</p>`}
     <//>
   </div>`;
 }
@@ -102,6 +102,13 @@ export function MatchingQueue({ online }) {
   const matching = useStore((s) => s.matching), myId = useStore((s) => s.me.playerId), p = matching.party;
   const [busy, setBusy] = useState(false), [picker,setPicker]=useState(false), root=useRef(null), motion=useRef(null);
   const { matchingMotion }=useSettings(); useTicker(1000); useData('bonds');
+  useLayoutEffect(()=>{
+    const node=root.current,style=document.documentElement.style;
+    if(!node){style.removeProperty('--matching-queue-height');return undefined;}
+    const measure=()=>style.setProperty('--matching-queue-height',`${node.offsetHeight}px`);
+    measure();const observer=new ResizeObserver(measure);observer.observe(node);
+    return()=>{observer.disconnect();style.removeProperty('--matching-queue-height');};
+  },[p?.id,p?.phase]);
   const roster=JSON.stringify([p?.members.map(m=>[m.playerId,m.ready,m.preference]),p?.invites.map(i=>i.id)]);
   useLayoutEffect(()=>{
     if (!root.current) { motion.current?.destroy(); motion.current=null; return; }
@@ -113,7 +120,7 @@ export function MatchingQueue({ online }) {
   const searching = !!p.attemptId, mine = p.members.find((m) => m.playerId === myId);
   const seconds = searching ? Math.max(0, Math.floor((Date.now()+matching.offset-p.startedAt)/1000)) : 0;
   const send = async (type, fields = {}) => { if (busy) return; setBusy(true); await request(type, { partyId: p.id, revision: p.revision, ...fields }); setBusy(false); };
-  const slots = [...p.members, ...p.invites.map((i) => ({ ...i, pending: true, name: i.identity.split('#')[0] }))];
+  const slots = [...p.members, ...p.invites.map((i) => ({ ...i, pending: true, name: i.name || i.identity.split('#')[0] }))];
   while (slots.length < 4) slots.push(null);
   return html`<section ref=${root} class="matching-queue" data-party=${p.id} data-attempt=${p.attemptId || ''} aria-label=${t('匹配队列')}>
     <div class="matching-queue__art" aria-hidden="true"><div class="matching-refresh"><${GIcon} name="refresh" /></div></div>
@@ -152,10 +159,10 @@ export function MatchingResult({ result, myId }) {
   const state = useStore((s) => s.matching);
   const [busy, setBusy] = useState(false);
   const self = result?.matching?.participants?.find((p) => p.playerId === myId);
-  if (!self || self.identity !== state.identity) return null;
+  if (!self || self.identity !== state.selfReference) return null;
   const block = async (identity) => { if (busy) return; setBusy(true); await request('matching.block', { matchId: result.matching.id, identity }); setBusy(false); };
   return html`<section class="matching-result" aria-label=${t('匹配队友')}><h3>${t('匹配队友')}</h3>
-    ${result.matching.participants.filter((p) => p.playerId !== myId).map((p) => html`<div class="matching-block" key=${p.identity}><span>${p.identity.split('#')[0]}</span>
+    ${result.matching.participants.filter((p) => p.playerId !== myId).map((p) => html`<div class="matching-block" key=${p.identity}><span>${p.name || p.name || p.name || p.name || p.name || p.identity.split('#')[0]}</span>
       <${Button} size="sm" disabled=${busy || state.blocks.includes(p.identity)} onClick=${() => block(p.identity)}>${state.blocks.includes(p.identity) ? t('已拉黑') : t('拉黑匹配队友')}<//></div>`)}
     <${MatchingAccount} />
   </section>`;

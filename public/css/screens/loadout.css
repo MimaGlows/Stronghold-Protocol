@@ -555,8 +555,8 @@
    this rule stays as a safety net for the old "无倒计时" placeholder ("--" digits + COUNTDOWN label). */
 .countdown[aria-label="无倒计时"] { display: none; }
 
-/* the app screens behind the overlay do not need to animate */
-.sp-loadout-open .app-root > .screen { visibility: hidden; }
+/* The opaque modal covers the background. Keep its inherited visibility intact:
+   nested overlays can close independently of the roster host. */
 
 /* ---- narrow / short viewports ------------------------------------------------------------------------------------------- */
 /* tighter tabs below 1200 px: the co-op briefing's countdown, chips and buttons beside three English tabs */
@@ -581,7 +581,9 @@
    list takes the whole width and the detail slides over it — a row's quick choice keeps the list, its portrait / name
    opens the detail */
 @media (max-width: 760px) {
-  .lo-top { padding: 0 .16rem; }
+  .lo-top { padding: 8px .16rem; height: auto; min-height: 48px; grid-template-columns: auto minmax(0,1fr); gap: 6px; }
+  .lo-top__center { grid-row: 2; grid-column: 1 / -1; }
+  .lo-top__right { grid-row: 1; grid-column: 2; }
 }
 @media (max-width: 1000px) {
   .lo-body { grid-template-columns: minmax(0, 1fr); }

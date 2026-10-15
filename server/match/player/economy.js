@@ -11,6 +11,8 @@ import { OK, fail } from './common.js';
 export class PlayerEconomy {
   addFunds(n, { reason = '' } = {}) {
     if (!Number.isFinite(n) || n === 0) return 0;
+    const eligible=n>0 && !/sell|refund|return|transfer|income/.test(reason);
+    if(this.m.customConfig && eligible)n=this.customGain('gold',n,this.m.customConfig.gold);
     const v = Math.trunc(n);
     const before = this.funds;
     this.funds = Math.max(0, this.funds + v);
@@ -42,6 +44,7 @@ export class PlayerEconomy {
   addLayers(bondId, n, { requireActive = false, reason = '' } = {}) {
     if (!this.gd.bond(bondId) || !Number.isFinite(n) || n <= 0) return 0;
     if (requireActive && !(this.bonds[bondId] && this.bonds[bondId].active)) return 0;
+    if(this.m.customConfig)n=this.customGain(`layers:${bondId}`,n,this.m.customConfig.layers);
     const before = this.layers[bondId] || 0;
     const add = layerGainRoom(before, Math.floor(n));
     if (add <= 0) return 0;

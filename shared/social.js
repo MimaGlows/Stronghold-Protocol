@@ -1,8 +1,10 @@
 // Account-owned social data; never identify a player by nickname alone.
 import { doctorIdentity, doctorProfileKey } from './doctor.js';
+import { hasMatchPrivacy } from './matchPrivacy.js';
 export const MAX_FRIENDS = 200;
 export const INVITE_TTL_MS = 120_000;
 export const INVITE_COOLDOWN_MS = 30_000;
+export function isTransitionSource(v){return !!v&&typeof v==='object'&&(v.roomCode===null||/^[A-Z0-9]{4,5}$/.test(v.roomCode))&&(v.partyId===null||/^[a-f0-9-]{36}$/.test(v.partyId))&&Number.isInteger(v.roomRevision)&&v.roomRevision>=0&&Number.isInteger(v.partyRevision)&&v.partyRevision>=0;}
 export const PROFILE_VISIBILITY = Object.freeze(['none', 'friends', 'friends_recent']);
 export function sanitizeSocialPrivacy(value) {
   return { allowFriendSpectate: value?.allowFriendSpectate !== false, allowFriendJoin: value?.allowFriendJoin !== false,
@@ -22,15 +24,14 @@ export function participantIdentity(p) {
   return doctorProfileKey(`${p.name}#${p.doctorCode || p.code || ''}`);
 }
 export function recentParticipatedGames(profile) {
-  if (Array.isArray(profile?.socialRecentMatches)) return profile.socialRecentMatches.filter((g) => !g.isMatchingMatch).slice(0, 5);
-  return (profile?.history || []).filter((e) => e.ended && (!e.playerId || !Array.isArray(e.result?.players)
+  if (Array.isArray(profile?.socialRecentMatches)) return profile.socialRecentMatches.filter(e=>!hasMatchPrivacy(e)).slice(0,5);
+  return (profile?.history || []).filter((e) => !hasMatchPrivacy(e) && e.ended && (!e.playerId || !Array.isArray(e.result?.players)
     || e.result.players.some((p) => p.playerId === e.playerId))).slice(0, 5);
 }
 export function recentCoPlayers(profile) {
   const friends = new Set(profile?.friends || []), self = participantIdentity(profile), seen = new Set();
   const rows = [];
   for (const game of recentParticipatedGames(profile)) {
-    if (game.isMatchingMatch || game.result?.isMatchingMatch || game.result?.matching) continue;
     for (const p of game.participants || []) {
       const identity = participantIdentity(p);
       if (!identity || identity === self || friends.has(identity) || seen.has(identity)) continue;

@@ -489,14 +489,15 @@ export function getMode(modeId) {
 export function useData(...names) {
   const [, force] = useReducer((c) => c + 1, 0);
   const key = names.join('|');
+  const observed = names.map((n) => data.status(n));
   useEffect(() => {
     let alive = true;
     const unsub = data.subscribe((n) => { if (alive && names.includes(n)) force(); });
     for (const n of names) data.load(n);
+    // Cached downloads can settle after render but before this passive subscription.
+    // Recheck after subscribing: a paused/reconnected match may produce no other render.
+    if (names.some((n, i) => data.status(n) !== observed[i])) force();
     return () => { alive = false; unsub(); };
   }, [key]);
-  return names.every((n) => {
-    const s = data.status(n);
-    return s === 'ready' || s === 'missing';
-  });
+  return observed.every((s) => s === 'ready' || s === 'missing');
 }

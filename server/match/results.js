@@ -92,7 +92,7 @@ export function buildResult(m, outcome) {
   const { victory, hiddenReached, hiddenCleared } = outcome;
   const players = [...m.players.values()].sort((a, b) => a.seat - b.seat);
   const titles = assignTitles(gd, players, victory);
-  const teamRounds = victory ? gd.bossRound + (hiddenCleared ? 1 : 0) : Math.max(0, Math.min(m.round, gd.bossRound) - 1);
+  const teamRounds = outcome.reason==='duration_limit' ? m.completedRound||0 : m.customConfig?.extraRounds ? victory?m.round:Math.max(0,m.round-1) : victory ? gd.bossRound + (hiddenCleared ? 1 : 0) : Math.max(0, Math.min(m.round, gd.bossRound) - 1);
   const rows = players.map((ps) => {
     const roundsPassed = !ps.alive && ps.eliminatedRound != null ? Math.max(0, ps.eliminatedRound - 1) : teamRounds;
     const lineup = boardOrder(ps.board).filter((x) => x.piece.kind === 'chess').map(({ r, c, piece }) => {
@@ -111,7 +111,7 @@ export function buildResult(m, outcome) {
     return {
       playerId: ps.playerId,
       seat: ps.seat,
-      name: ps.name, ...(ps.doctorCode ? { doctorCode: ps.doctorCode } : {}),
+      name: ps.name, ...(!m.matchPrivacy && ps.doctorCode ? { doctorCode: ps.doctorCode } : {}),
       isBot: ps.isBot,
       left: ps.left,
       alive: ps.alive,
@@ -129,14 +129,16 @@ export function buildResult(m, outcome) {
         perfectRounds: ps.stats.perfectRounds,
       },
       title: titles.get(ps.playerId) ?? null,
-      trophies: trophiesFor(gd, roundsPassed, cleared && hiddenCleared),
-      reward: rewardFor(gd, roundsPassed),
+      trophies: trophiesFor(gd, Math.min(roundsPassed,gd.bossRound+(hiddenCleared?1:0)), cleared && hiddenCleared),
+      reward: rewardFor(gd, Math.min(roundsPassed,gd.bossRound+(hiddenCleared?1:0))),
     };
   });
   return {
     t: 'm.result',
+    matchPrivacy:!!m.matchPrivacy, roomMode:m.mode, customConfig:m.customConfig||null, customEvaluation:m.customEvaluation||null, roomName:m.opts.roomName||null, unresolvedEnemies:m.customBank?.length||0,
+    ...(m.customConfig?{initialPlayerCount:m.initialPlayerCount,baselineKind:m.baselineKind,customRulesVersion:m.customRulesVersion}:{}),
     victory,
-    roundsPassed: teamRounds,
+    roundsPassed: teamRounds, lastRound:gd.lastRound,
     hiddenReached,
     hiddenCleared,
     reason: outcome.reason,

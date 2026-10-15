@@ -216,6 +216,7 @@ export function setupMatchWaves(gd, rng) {
  * 3 of 15 slots, SPECIAL the rest), then its entry.
  */
 export function roundPick(gd, rng, factionsOrSetup, round) {
+  round = gd.waveSourceRound ? gd.waveSourceRound(round) : round;
   const src = factionsOrSetup;
   const picks = src && !Array.isArray(src) && Array.isArray(src.picks) ? src.picks : (src && src.schedule && Array.isArray(src.schedule.picks) ? src.schedule.picks : null);
   if (picks) return picks[round] ?? null;

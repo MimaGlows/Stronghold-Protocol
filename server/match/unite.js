@@ -42,7 +42,7 @@ import { layerGainRoom } from '../../shared/constants.js';
  * @returns {null | { helpers: any[], leakers: any[], leaked: object[], notReentered: Map<string, number> }}
  */
 export function planUnite(m, results) {
-  if (m.isSolo) return null;
+  if (m.isSolo || m.customConfig?.whitebird) return null;
   const alive = m.alivePlayers();
   const leakers = [];
   const perfects = [];
@@ -72,7 +72,7 @@ export function planUnite(m, results) {
       const card = b && b.card;
       let bounty = card && card.payout !== 'perfect' && Number(card.coin) > 0 && l.enemyKey === card.enemyKey
         ? { coins: Math.trunc(card.coin), ownerPlayerId: ps.playerId } : null;
-      const extra = !bountyId && l.mods ? Math.trunc(Number(l.mods.bountyCoins) || 0) : 0;
+      const extra = (!bountyId || m.customConfig) && l.mods ? Math.trunc(Number(l.mods.bountyCoins) || 0) : 0;
       if (!bounty && extra > 0) bounty = { coins: extra, ownerPlayerId: ps.playerId };
       leaked.push({ enemyKey: l.enemyKey, mods: l.mods ? { ...l.mods } : null, lpr: l.lpr ?? 1, sourcePlayerId: ps.playerId, tag: l.tag ?? null, bounty });
     }
@@ -144,6 +144,7 @@ export function uniteBattleOpts(m, plan, timeLimit) {
     // 2 helpers: the first one meets the enemies first on the right-hand field (escaped_multi enters at col 18)
     const colOffset = plan.helpers.length > 1 && i === 0 ? 8 : 0;
     // the layers its own combat reached (bondsView, the round's pending gains; PRTS "以其阵地当前的状态") — see header
+    if (m.customConfig?.wildfire) for (const [uid] of carry) if (!summonUids.has(uid)) carry.delete(uid);
     const input = ps.battleInput({ side: 'L', colOffset, carry, reached: true });
     const ev = { input, kind: 'unite', round: m.round, spawns: wave.spawns };
     m.dispatch(ps, 'onBattleStart', ev);

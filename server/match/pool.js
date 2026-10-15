@@ -36,8 +36,8 @@ export function drawDisabledBonds(gd, rng, protectedBonds = [], weights = null) 
   });
   const protectedSet = new Set(protectedBonds);
   const core = eligible.filter((b) => gd.bond(b).isCore && !protectedSet.has(b));
-  if (protectedSet.size && core.length < nCore) throw new Error('Too many protected core bonds');
-  const addon = eligible.filter((b) => !gd.bond(b).isCore);
+  if (!gd.custom && protectedSet.size && core.length < nCore) throw new Error('Too many protected core bonds');
+  const addon = eligible.filter((b) => !gd.bond(b).isCore && !(gd.custom && protectedSet.has(b)));
   const drawn = [...(weights ? weightedSample(core, nCore, rng, weights) : sample(core, nCore, rng)), ...sample(addon, nAddon, rng)].sort();
   const off = new Set([...drawn, ...staticOff]);
   const banned = [];
@@ -210,8 +210,8 @@ export class SharedItemPool {
     let count = 0;
     const see = p => {
       if (!p) return;
-      if (p.kind === 'item' && this.gd.baseIdOf(p.id) === base) count += this.need(p.id);
-      for (const item of p.items || []) if (this.gd.baseIdOf(item.id) === base) count += this.need(item.id);
+      if (p.kind === 'item' && this.gd.baseIdOf(p.id) === base) count += Math.max(0,this.need(p.id)-(p.meta?.systemCopies||0));
+      for (const item of p.items || []) if (this.gd.baseIdOf(item.id) === base) count += Math.max(0,this.need(item.id)-(item.meta?.systemCopies||0));
     };
     for (const ps of this.players()) {
       for (const p of ps.hand) see(p);

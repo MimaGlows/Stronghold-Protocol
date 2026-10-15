@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "rows": [
+    {
+      "name": "baseline",
+      "seed": 7,
+      "score": 400,
+      "digest": "96320370137036b9bca1ce1d97ee46ecbad5fcd752efb3afcad1679478349422",
+      "time": 26,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "baseline",
+      "seed": 31,
+      "score": 400,
+      "digest": "96320370137036b9bca1ce1d97ee46ecbad5fcd752efb3afcad1679478349422",
+      "time": 26,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "baseline",
+      "seed": 101,
+      "score": 400,
+      "digest": "96320370137036b9bca1ce1d97ee46ecbad5fcd752efb3afcad1679478349422",
+      "time": 26,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "fastRedeploy",
+      "seed": 7,
+      "score": 409,
+      "digest": "7cff48129327a196dfd93c1eabfb4211f37fc6e9d15446efc7973832d31f7110",
+      "time": 27.2,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "fastRedeploy",
+      "seed": 31,
+      "score": 409,
+      "digest": "7cff48129327a196dfd93c1eabfb4211f37fc6e9d15446efc7973832d31f7110",
+      "time": 27.2,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "fastRedeploy",
+      "seed": 101,
+      "score": 409,
+      "digest": "7cff48129327a196dfd93c1eabfb4211f37fc6e9d15446efc7973832d31f7110",
+      "time": 27.2,
+      "kills": 0,
+      "leaks": 4
+    },
+    {
+      "name": "enemyPressure",
+      "seed": 7,
+      "score": 4041,
+      "digest": "8d5a27108d18277ad205228743854e0c723bf4d880860c447878fd3c71cc5438",
+      "time": 34,
+      "kills": 0,
+      "leaks": 8
+    },
+    {
+      "name": "enemyPressure",
+      "seed": 31,
+      "score": 4041,
+      "digest": "8d5a27108d18277ad205228743854e0c723bf4d880860c447878fd3c71cc5438",
+      "time": 34,
+      "kills": 0,
+      "leaks": 8
+    },
+    {
+      "name": "enemyPressure",
+      "seed": 101,
+      "score": 4041,
+      "digest": "8d5a27108d18277ad205228743854e0c723bf4d880860c447878fd3c71cc5438",
+      "time": 34,
+      "kills": 0,
+      "leaks": 8
+    },
+    {
+      "name": "allyPressure",
+      "seed": 7,
+      "score": 49,
+      "digest": "ef0c3d80062fcb0a660df6c5600484f58dcd2e74997c4a2210dabe6851a25685",
+      "time": 17.333,
+      "kills": 4,
+      "leaks": 0
+    },
+    {
+      "name": "allyPressure",
+      "seed": 31,
+      "score": 49,
+      "digest": "ef0c3d80062fcb0a660df6c5600484f58dcd2e74997c4a2210dabe6851a25685",
+      "time": 17.333,
+      "kills": 4,
+      "leaks": 0
+    },
+    {
+      "name": "allyPressure",
+      "seed": 101,
+      "score": 49,
+      "digest": "ef0c3d80062fcb0a660df6c5600484f58dcd2e74997c4a2210dabe6851a25685",
+      "time": 17.333,
+      "kills": 4,
+      "leaks": 0
+    }
+  ]
+}

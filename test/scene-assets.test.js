@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { artPlan, formatSummary, isPlayerFile, isRefused } from '../tools/package.mjs';
 import { localGaps, sceneInstallPlan } from '../tools/setup.mjs';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 test('sceneInstallPlan: fetch only with a client and extractor deps; otherwise the metal board', () => {
   const present = sceneInstallPlan({ hasScenes: true, client: false });

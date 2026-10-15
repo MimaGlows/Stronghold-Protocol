@@ -1,5 +1,6 @@
+import { checkCustom, customRoomName } from './custom.js';
 import { isPingTarget, COMMUNICATION_PHASES, RADIO_LINES } from './communication.js';
-import { isSocialIdentity, isSocialSearch, isSocialPrivacy } from './social.js';
+import { isSocialIdentity, isSocialSearch, isSocialPrivacy, isTransitionSource } from './social.js';
 import { CORE_PREFERENCES } from './matchmaking.js';
 import { isVoicePreferences } from './voice.js';
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
@@ -388,7 +389,7 @@ export const C2S = {
   'matching.roomPrepare': { bond: (v) => v === null || CORE_PREFERENCES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
   'matching.preference': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), bond: (v) => v === null || CORE_PREFERENCES.includes(v), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9), $optional: ['difficulty','revision','partyId'] },
   'matching.invite': { identity: isSocialIdentity, difficulty: (v) => DIFFICULTIES.includes(v) },
-  'matching.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), accept: isBool },
+  'matching.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), accept: isBool, replaceCurrent:isBool, source:isTransitionSource, $optional:['replaceCurrent','source'] },
   'matching.start': { partyId: (v) => v === null || (typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v)), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
   'matching.prepare': { partyId: (v) => v === null || (typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v)), difficulty: (v) => DIFFICULTIES.includes(v), bond: (v) => v === null || CORE_PREFERENCES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
   'matching.difficulty': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), difficulty: (v) => DIFFICULTIES.includes(v), revision: (v) => isInt(v, 0, 1e9) },
@@ -397,13 +398,14 @@ export const C2S = {
   'matching.return': { matchId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
   'matching.cancel': { partyId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), revision: (v) => isInt(v, 0, 1e9), attemptId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
   'matching.timeoutChoice': { attemptId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v), choice: (v) => ['start', 'wait', 'ai'].includes(v) },
-  'matching.block': { identity: isSocialIdentity, matchId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
-  'matching.unblock': { identity: isSocialIdentity },
+  'matching.block': { identity: v=>isSocialIdentity(v)||(typeof v==='string'&&/^ref:[a-f0-9]{32}$/.test(v)), matchId: (v) => typeof v === 'string' && /^[a-f0-9-]{36}$/.test(v) },
+  'matching.unblock': { identity: v=>isSocialIdentity(v)||(typeof v==='string'&&/^ref:[a-f0-9]{32}$/.test(v)) },
   // session & lobby
   'social.sync': {},
   'social.search': { identity: isSocialSearch },
-  ...Object.fromEntries(['avatar', 'add', 'remove', 'join', 'spectate', 'invite'].map((action) => [`social.${action}`, { identity: isSocialIdentity }])),
-  'social.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9]{32}$/.test(v), accept: isBool },
+  ...Object.fromEntries(['avatar', 'add', 'remove', 'invite'].map((action) => [`social.${action}`, { identity: isSocialIdentity }])),
+  ...Object.fromEntries(['join','spectate'].map(action=>[`social.${action}`,{identity:isSocialIdentity,replaceCurrent:isBool,source:isTransitionSource,$optional:['replaceCurrent','source']}])),
+  'social.inviteRespond': { inviteId: (v) => typeof v === 'string' && /^[a-f0-9]{32}$/.test(v), accept: isBool,replaceCurrent:isBool,source:isTransitionSource,$optional:['replaceCurrent','source'] },
   hello: { name: (v) => isStr(v, NAME_MAX_LEN + 5) && v.trim().length > 0 && (v.length <= NAME_MAX_LEN || /^.{1,24}#\d{4}$/.test(v)), token: (v) => v == null || isStr(v, 64), version: (v) => v == null || isInt(v, 0, 1e6), avatar: isAvatarChoice, $optional: ['token', 'version', 'avatar'] },
   'profile.stats.get': { offset: (v) => isInt(v, 0, 1000), $optional: ['offset'] },
   'profile.voice': { preferences: isVoicePreferences },
@@ -413,8 +415,10 @@ export const C2S = {
   'profile.transferCancel': { requestId: (v) => isStr(v, 32) && /^[a-f0-9]{32}$/.test(v) },
   'profile.records': { entries: (v) => isList(v, 200, (e) => isPlain(e) && isStr(e.id, 36) && /^[a-f0-9-]{36}$/.test(e.id) && isStr(e.key, 48) && /^[a-f0-9]{48}$/.test(e.key) && isStr(e.playerId, 40)) },
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop', difficulty: (v) => DIFFICULTIES.includes(v) },
-  'room.join': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop' || v === 'custom', difficulty: (v) => DIFFICULTIES.includes(v) },
+  'room.custom': { config: v => !!checkCustom(v), name: v => !!customRoomName(v), revision: v => isInt(v,0,1e9), difficulty:v=>DIFFICULTIES.includes(v), $optional:['difficulty'] },
+  'room.seat': { seat: v => isInt(v,0,5), revision: v => isInt(v,0,1e9) },
+  'room.join': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),replaceCurrent:isBool,source:isTransitionSource,$optional:['replaceCurrent','source'] },
   'room.leave': {},
   'room.ready': { ready: isBool },
   'room.setDifficulty': { difficulty: (v) => DIFFICULTIES.includes(v) },
@@ -422,10 +426,10 @@ export const C2S = {
   // human seat before every AI seat (server/match/match/phases.js humansFirst); room.state.aiPicksLast
   'room.setAiPicksLast': { on: isBool },
   'room.addBot': {},
-  'room.removeBot': { seat: (v) => isInt(v, 0, MAX_SEATS - 1) },
+  'room.removeBot': { seat: (v) => isInt(v, 0, 5) },
   // the host removes another human before the match (server/lobby.js kick; community report #17); playerId = the one the
   // host confirmed — a seat that changed hands meanwhile is refused
-  'room.kick': { seat: (v) => isInt(v, 0, MAX_SEATS - 1), playerId: isId },
+  'room.kick': { seat: (v) => isInt(v, 0, 5), playerId: isId },
   'room.start': {},
   'room.rerollSetup': { setupRevision: (v) => isInt(v, 0, 2 ** 31) },
   'room.cancelReroll': { voteId: (v) => isInt(v, 1, 2 ** 31) },
@@ -441,7 +445,7 @@ export const C2S = {
   // spectator seats (remake feature, community report #26; MAX_SPECTATORS): take one of a co-op room's spectator seats —
   // in its lobby or while its match runs — never a player seat; the host frees one by playerId (the spectator gets
   // room.closed { reason: 'kicked' }). room.leave / g.leave leave a spectator seat like a player seat.
-  'room.spectate': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
+  'room.spectate': { code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v),replaceCurrent:isBool,source:isTransitionSource,$optional:['replaceCurrent','source'] },
   'room.removeSpectator': { playerId: isId },
 
   // match

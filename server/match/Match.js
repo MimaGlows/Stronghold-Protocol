@@ -172,6 +172,7 @@
 //   common.js        what the modules share (FLOW_TICKER_PRIORITY, DELAYS, BAND_TURN_SECONDS — re-exported here, OK,
 //                    fail, BOSS_CLOCK_MS)
 
+import { initCustomMatch, installCustomMatch } from './custom.js';
 import { PHASE, modeIdFor } from '../../shared/constants.js';
 import { Battle } from '../sim/Battle.js';
 import { DataSource } from '../sim/simdata.js';
@@ -233,7 +234,9 @@ export class Match {
     }
     this.opts = opts;
     this.roomCode = opts.roomCode ?? '----';
-    this.mode = opts.mode === 'solo' ? 'solo' : 'coop';
+    this.mode = opts.mode === 'solo' ? 'solo' : opts.mode === 'custom' ? 'custom' : 'coop';
+    this.customConfig = opts.customConfig || null;
+    this.matchPrivacy = !!(opts.matchPrivacy || opts.isMatchingMatch);
     this.difficulty = opts.difficulty;
     this.modeId = opts.modeId || modeIdFor(this.mode, opts.difficulty);
     this.seed = (Number(opts.seed) >>> 0) || 1;
@@ -245,7 +248,8 @@ export class Match {
     this.broadcastFn = opts.broadcast;
     this.onEndFn = opts.onEnd;
     this.data = opts.data && typeof opts.data === 'object' ? opts.data : {};
-    this.gd = new GameData(this.data, this.modeId);
+    const customSolo = this.customConfig && new Set(opts.seats.filter(Boolean).map(s => s.playerId)).size === 1;
+    this.gd = new GameData(this.data, customSolo ? `mode_single_${String(this.difficulty).toLowerCase()}` : this.modeId);
     if (!this.difficulty) this.difficulty = this.gd.difficulty;
     this.isSolo = this.mode === 'solo' || this.gd.isSolo;
     /** 「AI 队友最后选择」 (opts.aiPicksLast, GitHub #338): humans draft before AI seats (MatchPhases.humansFirst) */
@@ -321,7 +325,8 @@ export class Match {
      * on anybody, so no phase outside a battle is timed — soloUntimed (user playtest #4 item 3). The mode's own rules
      * (draft order and skip, 6 机变 cards, 联防 …) stay.
      */
-    this.loneHuman = this.order.filter((p) => !p.isBot).length === 1;
+    this.loneHuman = !this.customConfig && this.order.filter((p) => !p.isBot).length === 1;
+    initCustomMatch(this);
 
     // per-match setup (DESIGN §6.5)
     const setup = setupMatchWaves(this.gd, this.rngSetup);
@@ -331,7 +336,7 @@ export class Match {
     this.bossId = setup.bossId;
     this.hiddenBossId = setup.hiddenBossId;
     // Owner-approved matching bias. Its separate stream never changes ordinary setup RNG.
-    const protect = this.matchingPreferences && rng('matching-preference')() < (opts.matchingProtection ?? 0.6) ? this.matchingPreferences : [];
+    const protect = this.customConfig ? this.customConfig.requiredBonds : this.matchingPreferences && rng('matching-preference')() < (opts.matchingProtection ?? 0.6) ? this.matchingPreferences : [];
     const bans = drawDisabledBonds(this.gd, this.matchingBondWeights ? rng('matching-room-bans') : this.rngSetup, this.matchingBondWeights ? [] : protect, this.matchingBondWeights);
     this.disabledBonds = bans.drawn;
     this.staticInactiveBonds = bans.staticOff;
@@ -416,3 +421,5 @@ for (const part of [MatchPlatform, MatchInfra, MatchMessaging, MatchViews, Match
     Object.defineProperty(Match.prototype, key, Object.getOwnPropertyDescriptor(part.prototype, key));
   }
 }
+
+installCustomMatch(Match);

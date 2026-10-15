@@ -24,6 +24,7 @@ export class MatchPlatform {
         this.finish({ victory: false, reason: 'error' });
         return;
       }
+      this.armDurationLimit();
       this.enterInfoCheck();
     });
   }
@@ -44,6 +45,7 @@ export class MatchPlatform {
       return this.clientCombat && msg && (msg.t === 'b.progress' || msg.t === 'b.result') ? OK : fail(ERR.WRONG_PHASE);
     }
     if (!msg || typeof msg !== 'object' || typeof msg.t !== 'string' || !GAME_TYPES.has(msg.t)) return fail(ERR.BAD_MSG);
+    if(this.durationDeadline && this.sched.now()>=this.durationDeadline){this.finish({victory:false,reason:'duration_limit'});return fail(ERR.WRONG_PHASE);}
     let res;
     try {
       res = this._handle(ps, msg);
@@ -203,6 +205,7 @@ export class MatchPlatform {
   dispose() {
     if (this.disposed) return;
     this.recorder?.safe(() => this.recorder.abort());
+    this.clearDurationLimit();
     this.disposed = true;
     if (this.runner) { try { this.runner.stop(); } catch { /* ignore */ } }
     this._stopClientCombat();

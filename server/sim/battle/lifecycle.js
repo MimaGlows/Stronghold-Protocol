@@ -176,6 +176,12 @@ export class BattleLifecycle {
     }
     this.unspawned = [];
     for (const p of this._pending) {
+      if(this.flags.customQueue && p.counted) {
+        const owner=p.ownerPlayerId??this._ownerForTile(p.pos??this._routeFor(p.routeIndex,p.route)?.start),pp=this._pp(owner);
+        if(pp){pp.leaked.push({enemyKey:p.enemyKey,mods:p.mods??null,lpr:1,sourcePlayerId:p.sourcePlayerId??owner,tag:p.tag??null,counted:true,spawned:false});pp.perfect=false;if(p.inTotal)pp.leakedInTotal++;}
+        this.leakedCount++;if(p.inTotal)this.leakedInTotal++;
+        continue; // billed exactly once, including UNITE; never also in unspawned
+      }
       if (p.precounted) {
         this.total--;
         const pp = this._pp(p.ownerPlayerId ?? this._ownerForTile(p.pos ?? this._routeFor(p.routeIndex, p.route)?.start));

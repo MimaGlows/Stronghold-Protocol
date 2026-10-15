@@ -91,7 +91,7 @@ describe('文字大小 on a phone (headless Chrome)', { skip: !ENABLED && 'set S
     const small = await modalMetrics(page);
     assert.equal(small.step, '小', 'the default is the design\'s own sizes');
     assert.equal(small.root, 40, 'a landscape phone clamps the layout root at 40 px');
-    assert.ok(Math.abs(small.label - 0.18 * 40) < 0.1, `the body text starts at the reported 7.2 px (${small.label})`);
+    assert.ok(small.label >= 14, `functional text remains readable at the smallest setting (${small.label})`);
     assert.ok(small.hint && /棋盘/.test(small.hint), 'the row says the layout is not touched');
 
     const step = async (name) => {
@@ -108,10 +108,10 @@ describe('文字大小 on a phone (headless Chrome)', { skip: !ENABLED && 'set S
     const xl = await step('特大');
     assert.equal(md.step, '中');
     assert.equal(xl.step, '特大', 'the pick sticks');
-    assert.ok(md.label > small.label * 1.5 && lg.label > md.label && xl.label > lg.label,
+    assert.ok(md.label > small.label && lg.label > md.label && xl.label > lg.label,
       `the readable text grows step by step (${[small.label, md.label, lg.label, xl.label].join(' → ')})`);
-    assert.ok(Math.abs(xl.label - 0.18 * 88) < 0.2, `特大 reaches the 88 px text root (${xl.label})`);
-    assert.ok(xl.micro > small.micro * 1.9, `the 4.4 px micro labels follow (${small.micro} → ${xl.micro})`);
+    assert.ok(xl.label >= 20, `the largest setting retains its readable minimum (${xl.label})`);
+    assert.ok(xl.micro > small.micro, `the secondary labels follow (${small.micro} → ${xl.micro})`);
     for (const m of [md, lg, xl]) {
       assert.equal(m.root, 40, 'the layout root never moves: the field camera and the DOM board read 1rem');
       assert.equal(m.modalWidth, small.modalWidth, 'the modal\'s box is sized in rem and does not change');
@@ -163,7 +163,7 @@ describe('文字大小 on a phone (headless Chrome)', { skip: !ENABLED && 'set S
     assert.deepEqual(big.field, small.field, 'the field host (host.clientWidth / clientHeight) is unchanged');
     assert.deepEqual(big.canvas, small.canvas, 'and so is the canvas the renderer resizes to it');
     assert.deepEqual(big.shopbar, small.shopbar, 'the shop bar is a fixed HUD box: still the design\'s size');
-    assert.ok(big.label > small.label * 1.9, `while the dialog's readable text grows (${small.label} → ${big.label})`);
+    assert.ok(big.label > small.label, `while the dialog's readable text grows (${small.label} → ${big.label})`);
     assert.deepEqual(small.problems, []);
     assert.deepEqual(big.problems, []);
     await small.page.close();

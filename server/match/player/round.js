@@ -10,6 +10,11 @@ import { boardOrder, pieceDir } from '../board.js';
 import { computeBonds, bondSnapshot, activatedLayers, bondsWithGains } from '../bondsMeta.js';
 
 export class PlayerRound {
+  customGain(key,n,percent) {
+    this.customRemainders ||= {};
+    const hundredths=Math.round(n*percent)+(this.customRemainders[key]||0);
+    const whole=Math.floor(hundredths/100);this.customRemainders[key]=hundredths-whole*100;return whole;
+  }
   startRound(r) {
     this.round = { refreshes: 0, buys: 0, sells: 0, spent: 0, gainedChess: 0, arts: 0 };
     this.pendingLayerGains = null; // settled (or lapsed) at the last SETTLE
@@ -19,7 +24,7 @@ export class PlayerRound {
     this.pendingFunds = 0;
     this.m.dispatch(this, 'onIncome', ev);
     const nonNeg = (v) => (Number.isFinite(v) && v > 0 ? Math.trunc(v) : 0);
-    this.addFunds(nonNeg(ev.income) + nonNeg(ev.pending), { reason: 'income' });
+    this.addFunds(this.m.customConfig ? this.customGain('gold',nonNeg(ev.income)+nonNeg(ev.pending),this.m.customConfig.gold) : nonNeg(ev.income)+nonNeg(ev.pending), {reason:'income'});
     // temp is NOT wiped here: the last prep's deadline resolved what the player could act on (endPrep); what overflowed
     // after it (battle-result grants, SETTLE merges, returned equipment) is shown and usable in this prep (tempDue).
     // Likewise reward offers of the last prep already expired at its end; what is still queued was earned after it —
@@ -51,6 +56,7 @@ export class PlayerRound {
   // `effects` are kept: a 信标 gift still pending is delivered to the teammate at the next round start (builtin_gift is
   // flagged afterElimination — GitHub #86); nothing else of an eliminated player is dispatched.
   eliminate(round) {
+    if(this.m.customConfig?.debt)this.customDebt={round:round??this.m.round,bounties:this.bounties.map(b=>({...b}))};
     this.alive = false;
     this.ready = false;
     this.eliminatedRound = round;
@@ -132,6 +138,7 @@ export class PlayerRound {
       }
     }
     return {
+      ...(this.m.customConfig?{customLayerRemainders:Object.fromEntries(Object.entries(this.customRemainders||{}).filter(([k])=>k.startsWith('layers:')).map(([k,v])=>[k.slice(7),v/100]))}:{}),
       playerId: this.playerId,
       seat: this.seat,
       side,

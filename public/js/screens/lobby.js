@@ -14,6 +14,7 @@
 import { ContinueMatchButton } from '../ui/continueMatch.js';
 import { validPreference } from '../../../shared/matchmaking.js';
 import { MatchingAccount, MatchingStartButton, MatchingQueue, MatchingCooldown } from '../ui/matchmaking.js';
+import { confirmRoomTransition } from '../ui/roomTransition.js';
 import { HostingCredit } from '../ui/hostingCredit.js';
 import { requestInvitePermissionOnGesture } from '../ui/social.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
@@ -81,6 +82,7 @@ export function stageNote(stages) {
 }
 
 const MODE_CARDS = [
+  { id:'custom', name:N_('自订模拟'), en:'CUSTOM SIMULATION', icon:'edit', desc:N_('定制敌军、干员与历战合约，建立自己的模拟协议。'), points:[N_('1–6 个席位'),N_('自定房间 · 自由选择位置')] },
   {
     id: 'solo', name: N_('独立模拟'), en: 'SOLO SIMULATION', icon: 'user',
     desc: N_('独自调配资金与干员，以自己的节奏完成整场模拟。'),
@@ -117,7 +119,7 @@ export function difficultyInfo(roomMode, difficulty) {
   };
 }
 
-const CODE_RE = new RegExp(`^[A-Z0-9]{${ROOM_CODE_LEN}}$`);
+const CODE_RE = /^[A-Z0-9]{4,5}$/;
 /**
  * Normalise user input into a room code: accepts a pasted invite link (`…?room=ABCD`), keeps
  * upper-cased alphanumerics and clamps to the code length.
@@ -128,7 +130,7 @@ export function normalizeCode(v) {
   let s = String(v ?? '');
   const m = s.match(/[?&]room=([A-Za-z0-9]+)/);
   if (m) s = m[1];
-  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, ROOM_CODE_LEN);
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
 }
 
 /**
@@ -251,7 +253,7 @@ export function LobbyScreen() {
   const me = useStore((s) => s.me, shallowEqual);
   const conn = useStore((s) => s.connection, shallowEqual);
   useData('config');
-  const [roomMode, setRoomMode] = useState(() => (loadPref('lobby.mode', 'coop') === 'solo' ? 'solo' : 'coop'));
+  const [roomMode, setRoomMode] = useState(() => (['solo','coop','custom'].includes(loadPref('lobby.mode','coop')) ? loadPref('lobby.mode','coop') : 'coop'));
   const [difficulty, setDifficulty] = useState(() => {
     const d = loadPref('lobby.difficulty', 'FUNNY');
     return DIFFICULTIES.includes(d) ? d : 'FUNNY';
@@ -294,14 +296,14 @@ export function LobbyScreen() {
     // `undefined` — codeArg keeps an event target out of the key and falls back to the input field
     const k = codeArg(c, code);
     if (!k) { toast(t('同盟密钥为 {ROOM_CODE_LEN} 位字母或数字', { ROOM_CODE_LEN }), 'warn'); return; }
-    run('join', () => net.request('room.join', { code: k }));
+      run('join', async() => {const transition=await confirmRoomTransition();if(transition!==null)await net.request('room.join', { code:k,...transition });});
   };
   // a spectator seat: no player seat taken, nothing to do but watch (also a match already running)
   const spectate = (c = code) => {
     // same guard as join: `onClick=${spectate}` passes the click event, not a code
     const k = codeArg(c, code);
     if (!k) { toast(t('同盟密钥为 {ROOM_CODE_LEN} 位字母或数字', { ROOM_CODE_LEN }), 'warn'); return; }
-    run('spectate', () => net.request('room.spectate', { code: k }).catch((err) => {
+      run('spectate', async() => {const transition=await confirmRoomTransition();if(transition===null)return;return net.request('room.spectate', { code:k,...transition }).catch((err) => {
       // Clearer than the bare ERR_TEXT: the usual cause is a code that is not the host's (a remembered one from an
       // earlier room, or another machine's) — the server can only answer "no such room".
       if (err?.code === ERR.ROOM_NOT_FOUND) {
@@ -313,7 +315,7 @@ export function LobbyScreen() {
         return;
       }
       throw err;
-    }));
+      });});
   };
   const backToTitle = () => {
     identity.setEntered(false);
@@ -354,7 +356,7 @@ export function LobbyScreen() {
       <section class="lobby-left">
         <div class="section-label"><span class="section-label__idx num">01</span>${t('模拟方式')}<${MicroLabel}>MODE<//></div>
         <div class="mode-cards">
-          ${MODE_CARDS.map((c) => html`<${ModeCard} key=${c.id} card=${c} selected=${displayMode === c.id} onSelect=${pickMode} />`)}
+          ${[...MODE_CARDS.slice(1),MODE_CARDS[0]].map((c) => html`<${ModeCard} key=${c.id} card=${c} selected=${displayMode === c.id} onSelect=${pickMode} />`)}
         </div>
 
         <div class="section-label"><span class="section-label__idx num">03</span>${t('加入同盟')}<${MicroLabel}>JOIN WITH ALLIANCE KEY<//></div>
@@ -382,10 +384,10 @@ export function LobbyScreen() {
         <div class="diff-list">
           ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${displayMode} difficulty=${d} selected=${selectedDifficulty === d} disabled=${!!matchingLocked || (party && party.leaderId !== me.playerId)} onSelect=${pickDifficulty} />`)}
         </div>
-        <div class="create-box matching-create-box"><span class="matching-create-spacer" aria-hidden="true"></span>
+        <div class=${`create-box matching-create-box ${roomMode==='custom'?'is-custom-mode':''}`}><span class="matching-create-spacer" aria-hidden="true"></span>
           <${Tooltip} block=${true} text=${online ? null : t('正在连接服务器…')}>
             <${Button} variant="primary" size="xl" block=${true} iconRight="chevrons" loading=${busy === 'create'} disabled=${!online || !!party} onClick=${create}>
-              ${roomMode === 'solo' ? t('开始独立模拟') : t('创建同盟')}
+              ${roomMode === 'solo' ? t('开始独立模拟') : roomMode === 'custom' ? t('创建自定房间') : t('创建同盟')}
             <//>
           <//>
           <${MatchingAccount} iconOnly=${true} />

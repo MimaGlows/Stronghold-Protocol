@@ -1,3 +1,4 @@
+import { instanceKey } from './instance.js';
 // Minimal observable store for the browser client.
 //
 // One app-wide store holds everything the UI renders from:
@@ -169,7 +170,7 @@ export function shallowEqual(a, b) {
  */
 export function loadPref(key, fallback) {
   try {
-    const raw = globalThis.localStorage?.getItem(`sp.pref.${key}`);
+    const raw = globalThis.localStorage?.getItem(instanceKey(`pref.${key}`));
     return raw == null ? fallback : JSON.parse(raw);
   } catch {
     return fallback;
@@ -182,7 +183,7 @@ export function loadPref(key, fallback) {
  * @param {any} value
  */
 export function savePref(key, value) {
-  try { if (!globalThis.localStorage) return false; globalThis.localStorage.setItem(`sp.pref.${key}`, JSON.stringify(value)); return true; } catch { return false; }
+  try { if (!globalThis.localStorage) return false; globalThis.localStorage.setItem(instanceKey(`pref.${key}`), JSON.stringify(value)); return true; } catch { return false; }
 }
 
 const identity = (s) => s;

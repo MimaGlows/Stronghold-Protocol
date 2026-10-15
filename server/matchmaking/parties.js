@@ -34,10 +34,10 @@ export class MatchingParties {
     if (!p) return null;
     return { id: p.id, revision: p.revision, leaderId: p.leaderId, difficulty: p.difficulty, phase: p.phase,
       attemptId: p.attempt?.id || null, startedAt: p.attempt?.startedAt || 0,
-      members: p.members.map((m) => { const s = this.session(m); return { playerId: m.playerId, identity: m.identity, name: s?.profile?.name || m.name,
+      members: p.members.map((m) => { const s = this.session(m); return { playerId: m.playerId, identity: this.service.reference(m.identity), name: s?.profile?.name || m.name,
         avatar: s?.avatar?.kind === 'custom' ? MATCHING_AVATAR : s?.avatar || DEFAULT_AVATAR,
         preference: this.service.store.get(m.identity).preference || null, ready: m.ready, connected: !!s?.connected }; }),
-      invites: [...this.invites.values()].filter((i) => i.partyId === p.id).map((i) => ({ id: i.id, identity: i.to, expiresAt: i.expiresAt })),
+      invites: [...this.invites.values()].filter((i) => i.partyId === p.id).map((i) => ({ id: i.id, identity: this.service.reference(i.to), name:i.to.replace(/#\d{4}$/,''), expiresAt: i.expiresAt })),
       permissions: { edit: p.phase === 'idle', start: p.phase === 'idle', cancel: !!p.attempt } };
   }
   publish(p) { if (!p) return; p.revision++; for (const m of p.members) { const s = this.session(m); if (s) this.service.state(s); } this.lobby.social?.changed(); }
@@ -68,6 +68,7 @@ export class MatchingParties {
   }
   cancel(p) { p.attempt = null; p.phase = 'idle'; for (const m of p.members) m.ready = false; this.publish(p); }
   beginSearch(p) {
+    if(this.lobby.maintenance)return fail(ERR.MAINTENANCE);
     const checked = this.check(p); if (checked.error) return checked;
     for (const i of [...this.invites.values()]) if (i.partyId === p.id) this.endInvite(i, 'expired');
     p.attempt = { id: randomUUID(), seed: this.service.nextSeed(), startedAt: this.lobby.now(), order: ++this.sequence };
@@ -119,6 +120,7 @@ export class MatchingParties {
     const c = this.check(p, false); if (c.error) return c;
     const checked = this.service.checkSession(session, p.difficulty); if (checked.error) return checked;
     if (p.members.some((m) => this.service.store.blocked(m.identity, i.to))) return fail(ERR.MATCH_BLOCKED);
+    if (msg.replaceCurrent) { const transition=this.lobby.checkRoomTransition(session,msg); if(transition.error)return transition; }
     this.service.clearInvalidPreference(session, p.difficulty);
     this.leaveIdentity(session);
     if (this.lobby.roomOf(session)) {
@@ -126,7 +128,7 @@ export class MatchingParties {
     }
     if (p.attempt) this.cancel(p);
     p.members.push({ playerId: session.playerId, identity: i.to, name: session.profile.name, ready: false, connected: true }); this.membership.set(session.playerId, p.id);
-    this.endInvite(i, 'accepted'); this.publish(p); return ok;
+    this.endInvite(i, 'accepted'); this.lobby.clearConflictingInvites(session); this.publish(p); return ok;
   }
   handle(session, msg) {
     if (msg.t === 'matching.invite') return this.invite(session, msg.identity, msg.difficulty);
@@ -264,6 +266,8 @@ export class MatchingParties {
       room = this.lobby.roomOf(host); room.queueGenerated = true; this.lobby.revokeShare(room);
     }
     const generated = room.queueGenerated;
+    // Latch before join broadcasts: closing backfill cannot undo this round's privacy.
+    room.matchPrivacy = true;
     const origins = new Map();
     if (!generated) for (const p of parties) {
       const origin = { id: p.id, difficulty: p.difficulty, leaderId: p.leaderId,
@@ -273,7 +277,7 @@ export class MatchingParties {
       for (const m of p.members) origins.set(m.playerId, origin);
     }
     for (const s of original) {
-      if (s.roomCode !== room.code) { const result = this.lobby.joinRoom(s, room); if (result.error) throw new Error('Validated party transfer failed'); }
+      if (s.roomCode !== room.code) { const result = this.lobby.joinRoom(s, room, { preserveParty: true }); if (result.error) throw new Error('Validated party transfer failed'); }
       const seat = room.seatOf(s.playerId); seat.ready = true; seat.preferenceSelected = true; seat.preference = this.service.store.get(this.service.identity(s)).preference || null; seat.matchingSource = true;
       if (!generated) seat.matchingOrigin = origins.get(s.playerId);
     }
@@ -289,7 +293,7 @@ export class MatchingParties {
     return ok;
   }
   pump() {
-    if (this.pumping) return;
+    if (this.pumping || this.lobby.maintenance) return;
     this.pumping = true;
     try {
       for (const i of [...this.invites.values()]) if (i.expiresAt <= this.lobby.now() || !this.inviteable(this.parties.get(i.partyId))) { const p = this.parties.get(i.partyId); this.endInvite(i, 'expired'); this.publish(p); }

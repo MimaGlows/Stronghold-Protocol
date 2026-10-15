@@ -162,9 +162,10 @@ export function ResultView({ res, pub = null, myId = null, backLabel, onBack, qu
       <section class="result__hero">
         <div class="result__summary">
         <div class="result__logo"><${Sprite} k="entry/season_logo_settle" class="result__logoimg" fallback=${html`<${MicroLabel} tone="mint">STRONGHOLD PROTOCOL</${MicroLabel}>`} /></div>
-        ${r.difficulty ? html`<${DifficultyTag} difficulty=${r.difficulty} size="lg" />` : null}
-        <h1 class="result__headline">${r.victory ? t('模拟完成') : t('模拟失败')}</h1>
-        <p class="result__sub">${r.victory ? t('成功卫戍 · 敌方领袖已被击败') : t('防线已被突破')}</p>
+        ${r.difficulty ? html`<${DifficultyTag} difficulty=${r.difficulty} size="lg" score=${res?.customConfig?res.customEvaluation?.score:undefined} />` : null}
+        ${res?.customConfig?html`<span class="t-mint">${t('自定')} · ${t('难度系数')} <b class="num">${res.customEvaluation?.score||''}</b></span>`:null}
+        <h1 class="result__headline">${res?.reason==='duration_limit'?t('未通关：达到时限'):r.victory ? t('模拟完成') : t('模拟失败')}</h1>
+        <p class="result__sub">${res?.reason==='duration_limit'?t('服务器已结束本局，不计放弃处罚'):r.victory ? t('成功卫戍 · 敌方领袖已被击败') : t('防线已被突破')}</p>
         <div class="result__rounds">
           <span class="result__rlabel">${t('通过回合')}</span>
           <b class="result__rnum num">${r.roundsPassed}</b>

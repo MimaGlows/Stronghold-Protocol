@@ -58,7 +58,7 @@ test('computeBuildTag: server-only code and downloaded media do not change the b
   }
 });
 
-test('computeBuildTag: stable for one tree, different when a runtime file changes (size or mtime)', () => {
+test('computeBuildTag: stable for one tree, different when a runtime file changes (content; timestamps do not affect identical builds)', () => {
   const root = fixture();
   try {
     const a = computeBuildTag(root);
@@ -68,11 +68,11 @@ test('computeBuildTag: stable for one tree, different when a runtime file change
     fs.writeFileSync(path.join(root, 'public/js/file.js'), 'yy');
     const b = computeBuildTag(root);
     assert.notEqual(b, a, 'a changed runtime file is a new build');
-    // …and so is a rewrite with the same size but a new mtime (a deploy of identical bytes keeps its timestamp)
+    // Copying identical bytes between instances must not change the shared build ID.
     const target = path.join(root, 'public/css/file.css');
     const st = fs.statSync(target);
     fs.utimesSync(target, st.atime, new Date(st.mtimeMs + 5000));
-    assert.notEqual(computeBuildTag(root), b);
+    assert.equal(computeBuildTag(root), b);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

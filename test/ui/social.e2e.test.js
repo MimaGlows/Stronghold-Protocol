@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../../server/index.js';
+import { buildRecord } from '../../shared/stats.js';
 const chrome = [process.env.SP_CHROME_PATH, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', '/usr/bin/google-chrome'].find((p) => p && fs.existsSync(p));
 const enabled = process.env.SP_SOCIAL_E2E === '1' && !!chrome;
@@ -65,7 +66,8 @@ test('independent Chrome profiles: drawer, invitations, live coop/solo spectator
       await a.waitForFunction(() => document.querySelector('.friends-note[role="alert"]')?.textContent.includes('不能只输入代码'));
       await a.$eval('.friends-search__code input', (el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
       await a.type('.friends-search__name input', '友乙'); await a.click('.friends-search button');
-      await a.waitForFunction(() => document.querySelectorAll('.friends-search-result').length === 2);
+      await a.waitForFunction(() => !!document.querySelector('.friends-note[role="alert"]'));
+      assert.equal((await a.$$('.friends-search-result')).length,0,'partial identities cannot discover other accounts');
       await a.$eval('.friends-search__name input', (el) => { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); });
     }
     await a.type('.friends-search__name input', '好友乙'); await a.type('.friends-search__code input', '0001'); await a.click('.friends-search button');
@@ -91,23 +93,25 @@ test('independent Chrome profiles: drawer, invitations, live coop/solo spectator
     await clickText(b, '.modal__actions button', '完成'); await b.evaluate(() => globalThis.__SP__.store.patch('session', { entered: true })); await b.waitForSelector('.friends-handle');
     await request(b, 'social.add', { identity: '好友甲#0001' });
     await a.waitForSelector('.friend-profile-avatar:not(:disabled)'); await a.bringToFront(); await a.click('.friend-profile-avatar');
-    await a.waitForFunction(() => document.querySelector('.history-list h2')?.textContent.includes('好友乙#0001'));
-    await a.waitForFunction(() => document.querySelector('.history-empty')?.textContent.includes('暂无已结算'));
-    await a.screenshot({ path: path.join(out, 'friend-history.png') }); await clickText(a, '.history-overlay button', '关闭');
+    await a.waitForFunction(() => document.querySelector('.st-note b')?.textContent.includes('好友乙#0001'));
+    await a.waitForFunction(() => document.querySelector('.st-empty')?.textContent.includes('还没有记录'));
+    await a.screenshot({ path: path.join(out, 'friend-history.png') }); await a.click('.st-back');
     const saved = { v: 1, id: '2233ab45-6767-4545-baba-898989898989', key: 'b'.repeat(48), version: server.replays.version, status: 'ready', startedAt: Date.now(), expiresAt: Date.now() + 7200000, durationMs: 0, nodes: [], fields: [], events: [], restrictions: {}, participants: [{ playerId: 'history-a', name: '好友甲', doctorCode: '0001' }, { playerId: 'history-b', name: '好友乙', doctorCode: '0001' }], result: { victory: true, roundsPassed: 1, difficulty: 'NORMAL', modeId: 'mode_multi_normal', players: [{ playerId: 'history-a', name: '好友甲', doctorCode: '0001' }, { playerId: 'history-b', name: '好友乙', doctorCode: '0001' }] } };
     server.replays.write(saved);
     const ticket = { id: saved.id, key: saved.key, startedAt: saved.startedAt };
     server.lobby.profiles.remember(server.lobby.profiles.read('好友乙', '0001'), ticket, 'history-b', saved.result);
     server.lobby.profiles.remember(server.lobby.profiles.read('好友甲', '0001'), ticket, 'history-a', saved.result);
-    await a.click('.friend-profile-link'); await a.waitForSelector('.history-row'); await a.click('.history-row'); await a.waitForSelector('.history-result .result');
+    for(const [name,pid] of [['好友甲','history-a'],['好友乙','history-b']]){const profile=server.lobby.profiles.read(name,'0001'),record=buildRecord(saved.result,{myId:pid,now:saved.startedAt});record.id=saved.id;record.replay=server.lobby.accountStats.ticket(profile,saved);server.lobby.accountStats.put(profile,record);}
+    await a.click('.friends-handle');await a.waitForFunction(()=>getComputedStyle(document.querySelector('.friends-panel')).transform==='matrix(1, 0, 0, 1, 0, 0)');
+    await a.click('.friend-profile-link');await a.waitForSelector('.st'); await a.waitForSelector('.st-table--history .is-clickable'); await a.click('.st-table--history .is-clickable'); await a.waitForSelector('.history-result .result');
     assert.equal(await a.$('.history-result .rcard__you'), null, 'another player is not labelled as the viewer');
     assert.equal(await a.evaluate(async () => (await import('/js/replay/history.js')).historyStore.get().items.length), 0, 'viewing another profile does not import their ticket');
-    await a.screenshot({ path: path.join(out, 'friend-history-result.png') }); await clickText(a, '.history-overlay button', '返回记录'); await clickText(a, '.history-overlay button', '关闭');
+    await a.screenshot({ path: path.join(out, 'friend-history-result.png') }); await clickText(a, '.history-overlay button', '返回记录'); await a.click('.st-back');await a.click('.friends-handle');await a.waitForFunction(()=>getComputedStyle(document.querySelector('.friends-panel')).transform==='matrix(1, 0, 0, 1, 0, 0)');
     await request(b, 'profile.privacy', { preferences: { allowFriendJoin: true, allowFriendSpectate: true, profileVisibility: 'friends_recent' } });
     await request(a, 'social.remove', { identity: '好友乙#0001' }); await a.waitForSelector('.friends-section:last-child .friend-profile-link:not(:disabled)');
-    await a.click('.friends-section:last-child .friend-profile-link'); await a.waitForSelector('.history-row'); await clickText(a, '.history-overlay button', '关闭'); await request(a, 'social.add', { identity: '好友乙#0001' });
+    await a.click('.friends-section:last-child .friend-profile-link'); await a.waitForSelector('.st-table--history .is-clickable'); await a.click('.st-back');await a.click('.friends-handle');await a.waitForFunction(()=>getComputedStyle(document.querySelector('.friends-panel')).transform==='matrix(1, 0, 0, 1, 0, 0)');await request(a, 'social.add', { identity: '好友乙#0001' });
     await request(b, 'social.remove', { identity: '好友甲#0001' });
-    await b.click('.friends-handle'); await clickText(b, '.friends-panel footer button', '启用邀请通知');
+    await b.click('.friends-handle'); await b.waitForSelector('.friends-panel footer .btn');await b.click('.friends-panel footer .btn');
     assert.equal(await b.evaluate(() => globalThis.__permissionRequests), 1);
     const b2 = await open('好友乙#0001', { width: 1214, height: 801 }, b.browserContext());
     await request(a, 'room.create', { mode: 'coop', difficulty: 'NORMAL' });
@@ -158,9 +162,10 @@ test('independent Chrome profiles: drawer, invitations, live coop/solo spectator
     assert.ok(await mobile.$eval(`${friend} button`, (e) => e.getBoundingClientRect().height >= 44));
     assert.ok(await mobile.$eval('.friends-search button', (e) => e.getBoundingClientRect().height >= 44));
     assert.ok(await mobile.$eval('.friends-panel footer button', (e) => e.getBoundingClientRect().height >= 44));
-    await mobile.evaluate(() => globalThis.__SP__.store.patch('session', { entered: false })); await mobile.bringToFront(); await mobile.waitForSelector('.title-settings');
+    // Leave the observer seat before returning to login; a live-match recovery overlay correctly blocks background controls.
+    await mobile.evaluate(async()=>{try{await globalThis.__SP__.net.request('room.leave');}catch(e){if(e.code!=='NOT_IN_ROOM')throw e;}const{emptyMatch}=await import('/js/store.js');globalThis.__SP__.store.set({room:null,match:emptyMatch()});globalThis.__SP__.store.patch('session',{entered:false});}); await mobile.bringToFront(); await mobile.waitForSelector('.title-settings');
     await mobile.waitForFunction(() => getComputedStyle(document.querySelector('.title-login')).transform === 'none');
-    await mobile.tap('.title-settings'); await mobile.waitForSelector('.set-privacy');
+    await mobile.$eval('.title-settings',e=>e.scrollIntoView({block:'center'}));await mobile.screenshot({path:path.join(out,'title-settings-hit.png')});await mobile.waitForFunction(()=>{const e=document.querySelector('.title-settings'),r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));});await mobile.tap('.title-settings'); await mobile.waitForSelector('.set-privacy');
     await mobile.waitForFunction(() => document.querySelector('.modal').getAnimations({ subtree: true }).every((animation) => animation.playState === 'finished'));
     await mobile.$eval('.set-privacy__scope', (el) => el.scrollIntoView({ block: 'center' }));
     await mobile.waitForFunction(() => { const r = document.querySelector('.set-privacy__scope').getBoundingClientRect(), box = document.querySelector('.modal__body').getBoundingClientRect(); return r.top >= box.top && r.bottom <= box.bottom; });

@@ -44,6 +44,7 @@ const cx = (...p) => p.flat().filter(Boolean).join(' ');
  *   banned: the banned chess ids the data knows, by tier (ties keep the server's order); perBond: bondId → banned members
  */
 export function matchInfoModel(pub, { bonds = [], chess = () => null, mode = null, priv = null, diyData = null } = {}) {
+  if(pub?.hiddenWar)return {hidden:true,sets:{drawn:new Set(),off:new Set()},stateOf:()=>null,bonds:[],core:[],addon:[],banned:[],perBond:new Map(),diyBanned:[]};
   const sets = disabledBondSets(pub, mode?.inactiveBondIds);
   const stateOf = (id) => (sets.off.has(id) ? 'off' : sets.drawn.has(id) ? 'drawn' : null);
   const list = (Array.isArray(bonds) ? bonds : []).filter((b) => !!b && typeof b === 'object' && typeof b.bondId === 'string')
@@ -149,10 +150,15 @@ export function BannedOperators({ model }) {
  * @param {{ model: MatchInfoModel }} props
  */
 export function MatchInfo({ model }) {
+  if(model.hidden)return html`<${HiddenMatchInfo}/>`;
   return html`<${MatchBondRow} title=${t('核心盟约')} micro="CORE BONDS" bonds=${model.core} model=${model} />
     <${MatchBondRow} title=${t('附加盟约')} micro="ADD-ON BONDS" bonds=${model.addon} model=${model} />
     <${MatchLegend} model=${model} />
     <${BannedOperators} model=${model} />`;
+}
+
+export function HiddenMatchInfo(){
+  return html`<div class="hidden-intel hidden-intel--bonds brackets" role="status"><${Icon} name="lock"/><strong>${t('隐秘战争生效')}</strong><span>${t('盟约启用与禁用信息已隐藏')}</span></div>`;
 }
 
 /**

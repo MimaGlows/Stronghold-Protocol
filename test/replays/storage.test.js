@@ -23,6 +23,13 @@ test('identical deployment contents have the same replay version on Windows and 
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 function record() { return { v: 1, id: randomUUID(), key: 'a'.repeat(48), version: 'v1', ttlMs: 72 * 3600 * 1000, startedAt: 100, endedAt: 200, expiresAt: 200 + 72 * 3600 * 1000, status: 'ready', errors: [], result: { victory: true }, restrictions: { difficulty: 'NORMAL' }, nodes: [{ public: { round: 14 }, players: { p: { private: { funds: 8 } } } }], events: [], publicTrack: [], fields: [] }; }
+test('matching archives redact public codes while checking private ownership',async()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'sp-private-owner-')),a=new ReplayArchive(dir,quiet,{now:()=>200,version:'v1'});
+  try{const r=record();r.result.matchPrivacy=true;r.participants=[{playerId:'p',name:'PrivateQA',doctorCode:'1234'}];a.write(r);
+    assert.equal(a.get(r.id,r.key,{summaryOnly:true}).participants[0].doctorCode,undefined);
+    assert.equal(a.owns(r.id,r.key,'p','PrivateQA','1234'),true);assert.equal(a.owns(r.id,r.key,'p','PrivateQA','4321'),false);assert.equal(a.owns(r.id,'b'.repeat(48),'p','PrivateQA','1234'),false);
+  }finally{await a.close();fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('snapshot codec is lossless across changes, removals, order, empty frames and keyframes', () => {
   const r = record(); r.fields = [{ frames: Array.from({ length: 220 }, (_, i) => ({ gt: i / 10, snap: { t: i / 10, units: i % 11 ? [[i % 3, 1, i / 3], [7, 2, 10]] : [], killed: i, boss: { hp: 100 - i } }, ev: [['attack', i]], progress: { leaks: i } })) }];
   assert.deepEqual(unpackRecord(packRecord(r)), r);

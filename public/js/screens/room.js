@@ -11,6 +11,8 @@
 // button for 观战中 and offers 入座 (room.join of the room) while a player seat is free.
 // Texts go through t() (docs/I18N.md).
 
+import { CustomRoomScreen } from './customRoom.js';
+import { RoomInvite } from '../ui/roomInvite.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { showMatchingAdmissionError } from '../ui/matchingFeedback.js';
 import { MatchingBackfillToggle, RoomAllianceButton } from '../ui/matchmaking.js';
@@ -38,7 +40,7 @@ import { t, tc } from '../../../shared/i18n.js';
  * @returns {(null | {seat:number, playerId:any, name:string, isBot:boolean, ready:boolean, connected:boolean})[]}
  */
 export function normalizeSeats(room) {
-  const cap = room?.mode === 'solo' ? 1 : MAX_SEATS;
+  const cap = room?.mode === 'solo' ? 1 : room?.mode==='custom' ? room.capacity : MAX_SEATS;
   const src = Array.isArray(room?.seats) ? room.seats : [];
   const out = [];
   for (let i = 0; i < cap; i++) {
@@ -144,7 +146,7 @@ function SeatCard({ seat, index, room, facts, myId, busy, onAddBot, onRemoveBot,
       <span class="seat__name">${seat.name || t('博士')}</span>
       ${isMe ? html`<span class="seat__you">${t('你')}</span>` : null}
     </div>
-    ${room.matching?.rules && !seat.isBot ? html`<${MicroLabel}>DOCTOR<//><span class="seat__preference">${seat.preferenceSelected ? data.get('bonds')?.[seat.preference]?.name || t('不限') : t('等待选择盟约')}</span>` : html`<${MicroLabel}>${seat.isBot ? 'AUTONOMOUS UNIT' : `DOCTOR #${seat.doctorCode || doctorNo(seat.playerId)}`}<//>`}
+    ${(room.matching?.rules || room.matchPrivacy) && !seat.isBot ? html`<${MicroLabel}>DOCTOR<//><span class="seat__preference">${seat.preferenceSelected ? data.get('bonds')?.[seat.preference]?.name || t('不限') : t('等待选择盟约')}</span>` : html`<${MicroLabel}>${seat.isBot ? 'AUTONOMOUS UNIT' : `DOCTOR #${seat.doctorCode || doctorNo(seat.playerId)}`}<//>`}
     <footer class="seat__foot">
       <span class=${`seat__state seat__state--${state}`}>
         ${state === 'ready' ? html`<${Icon} name="check" />${t('已就绪')}`
@@ -177,21 +179,7 @@ function SpectatorBar({ facts, myId, busy, onRemove, onSit }) {
 }
 
 function InviteBox({ code, name, difficulty }) {
-  const copy = async (what) => {
-    // the copied link carries an invitation line (#103): 「{name}邀请你加入卫戍协议：盟约【{difficulty}】」
-    const invite = t('{name}邀请你加入卫戍协议：盟约【{difficulty}】', { name: name ?? '', difficulty: DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : '' });
-    const ok = await copyText(what === 'code' ? code : `${inviteLink(code)} ${invite}`);
-    if (ok) toast(what === 'code' ? t('已复制同盟密钥 {code}', { code }) : t('已复制邀请链接'), 'success');
-    else toast(t('复制失败，请手动复制'), 'warn');
-  };
-  return html`<div class="invite brackets">
-    <div class="invite__label"><${Icon} name="key" /><span>${t('同盟密钥')}</span><${MicroLabel}>ALLIANCE KEY<//></div>
-    <div class="invite__code num selectable" aria-label=${t('同盟密钥 {code}', { code })}>${[...String(code)].map((ch, i) => html`<span key=${i}>${ch}</span>`)}</div>
-    <div class="invite__btns">
-      <${Button} size="sm" icon="copy" onClick=${() => copy('code')}>${t('复制密钥')}<//>
-      <${Button} size="sm" icon="link" onClick=${() => copy('link')}>${t('复制链接')}<//>
-    </div>
-  </div>`;
+  return html`<${RoomInvite} code=${code} name=${name} difficulty=${difficulty}/>`;
 }
 
 function DifficultyPicker({ room, isHost, busy, onPick }) {
@@ -226,7 +214,8 @@ function AiLastToggle({ option, busy, onToggle }) {
 }
 
 /** Room screen component. */
-export function RoomScreen() {
+export function RoomScreen(){const room=useStore(s=>s.room);return html`<${room?.mode==='custom'?CustomRoomScreen:OrdinaryRoomScreen} />`;}
+function OrdinaryRoomScreen() {
   useData('bonds');
   const room = useStore((s) => s.room);
   const me = useStore((s) => s.me, shallowEqual);

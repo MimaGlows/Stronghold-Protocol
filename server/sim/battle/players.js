@@ -46,6 +46,7 @@ export class BattlePlayers {
       // spawns.js `_queueSpawn` / `inTotal`, deploy.js), `resolved` is derived from them at result time.
       killed: 0, total: 0, leaked: [], perfect: true, killedInTotal: 0, leakedInTotal: 0,
       layerGains: {}, coins: 0, damageDealt: 0, bossDamage: 0, healingDone: 0, deaths: 0, unitsEnd: [], unitStats: [],
+      ...(this.flags.custom ? {customRemainders:{...p.customLayerRemainders}} : {}),
     };
     const late = [];
     for (const u of p.units ?? []) {
@@ -184,7 +185,7 @@ export class BattlePlayers {
   _makeAlly(ps, def, kind, r, c, extra = {}) {
     const st = def.stats;
     const u = new Unit({
-      id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
+      customStats:this.flags.custom, id: ++this._idSeq, side: 'ally', kind, def, defId: def.id, name: def.name, ownerId: ps ? ps.playerId : null,
       uid: extra.uid ?? null, ownerUnit: extra.ownerUnit ?? null, x: c, y: r, tileR: r, tileC: c,
       dir: extra.dir != null ? normDir(extra.dir) : extra.facing != null ? normDir(extra.facing) : ps ? ps.dir : 'RIGHT',
       base: {

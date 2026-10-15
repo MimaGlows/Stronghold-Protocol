@@ -11,6 +11,7 @@ import { html, Icon, Tabs, MicroLabel } from './components.js';
 import { Img, UnitThumb, BondGlyph, BandIcon, RichText, GIcon } from './gameComponents.js';
 import { groupEnemies, factionTypes, briefingBondTip } from './gameLogic.js';
 import { matchInfoModel, DiyBannedLine } from './matchInfo.js';
+import { HiddenMatchInfo } from './matchInfo.js';
 import { factionIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
 import { t, tParts, N_ } from '../../../shared/i18n.js';
@@ -61,6 +62,7 @@ function EnemiesTab({ pub, priv, onEnemy }) {
 }
 
 function InfoTab({ pub, priv, onChess, bandId = null, bandOwner = null }) {
+  if(pub?.hiddenWar)return html`<div class="edrawer__body"><${HiddenMatchInfo}/></div>`;
   const model = matchInfoModel(pub, {
     bonds: data.list('bonds'), chess: (id) => data.lookup('chess', id), mode: data.get('config')?.modes?.[pub?.modeId],
     // the own 自选 pieces this match leaves out of the shop (m.private.diyBanned) — not while scouting a teammate

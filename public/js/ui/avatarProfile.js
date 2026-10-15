@@ -1,3 +1,4 @@
+import { instanceKey } from '../instance.js';
 // Server profiles own avatars. Host-only cookies cache only the explicitly tagged profile.
 import { createStore, store } from '../store.js';
 import { identity, net as profileNet } from '../net.js';
@@ -7,9 +8,9 @@ import { toast } from './toasts.js';
 import { showMatchingAvatarNotice } from './matchingFeedback.js';
 import { t, N_ } from '../../../shared/i18n.js';
 
-export const AVATAR_PREF = 'sp.avatar';
+export const AVATAR_PREF = instanceKey('avatar');
 const CHUNK_SIZE = 3000, MAX_CHUNKS = 12, MAX_AGE = 365 * 24 * 60 * 60;
-const OWNER_COOKIE = 'sp.avatar.owner';
+const OWNER_COOKIE = instanceKey('avatar.owner');
 const DATA_PREFIX = 'data:image/webp;base64,';
 
 function cookieMap(doc) {
@@ -128,7 +129,7 @@ export function openAvatarForProfile(rawName, net = profileNet) {
 
 // Cookies have no storage event. Broadcast updates within an origin and reread on tab focus.
 const avatarChannel = (() => {
-  try { return globalThis.document && typeof BroadcastChannel === 'function' ? new BroadcastChannel('sp.avatar') : null; }
+  try { return globalThis.document && typeof BroadcastChannel === 'function' ? new BroadcastChannel(instanceKey('avatar')) : null; }
   catch { return null; }
 })();
 

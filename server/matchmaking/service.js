@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { ERR } from '../../shared/constants.js';
 import { MATCH_RECONNECT_MS, validPreference, matchingIdentity } from '../../shared/matchmaking.js';
 import { sendSession } from '../net.js';
@@ -16,7 +16,7 @@ export class MatchmakingService {
     this.timers = new Map();
     this.reconnectTimers = new Map();
     this.sequence = 0;
-    this.parties = new MatchingParties(this);
+    this.referenceSecret = randomBytes(32); this.references = new Map(); this.parties = new MatchingParties(this);
   }
   configure(dir) { this.store = new MatchingStore(dir); }
   identity(session) { return matchingIdentity(session?.profile); }
@@ -35,11 +35,12 @@ export class MatchmakingService {
       sendSession(session, { t: 'm.toast', kind: 'warn', text: N_('切换难度后，原阵营偏好不可用，已清空') }); this.state(session);
     }
   }
+  reference(identity){const ref='ref:'+createHmac('sha256',this.referenceSecret).update(identity).digest('hex').slice(0,32);this.references.set(ref,identity);return ref;}
   state(session) {
     const identity = this.identity(session);
     if (!identity) return;
     const a = this.store.get(identity);
-    sendSession(session, { t: 'matching.state', identity, blocks: a.blocks, bannedUntil: a.bannedUntil, preference: a.preference || null, party: this.parties.view(this.parties.of(session)), restricted: this.restricted(session), serverNow: this.lobby.now() });
+    sendSession(session, { t: 'matching.state', identity, selfReference:this.reference(identity), blocks: a.blocks.map(id=>this.reference(id)), blockLabels:Object.fromEntries(a.blocks.map(id=>[this.reference(id),id.replace(/#\d{4}$/,'')])) , bannedUntil: a.bannedUntil, preference: a.preference || null, party: this.parties.view(this.parties.of(session)||this.partyForIdentity(session)), restricted: this.restricted(session), serverNow: this.lobby.now() });
   }
   checkSession(session, difficulty, preference = null) {
     const identity = this.identity(session);
@@ -70,11 +71,11 @@ export class MatchmakingService {
       const identity = this.identity(session);
       if (!identity) return fail(ERR.MATCH_ACCOUNT);
       if (msg.t === 'matching.block') {
-        const error = this.store.block(identity, msg.identity, msg.matchId);
+        const error = this.store.block(identity, this.references.get(msg.identity)||msg.identity, msg.matchId);
         this.state(session); return error ? fail(error) : ok;
       }
       if (msg.t === 'matching.unblock') {
-        this.store.edit(identity, (a) => { a.blocks = a.blocks.filter((id) => id !== msg.identity); });
+        this.store.edit(identity, (a) => { a.blocks = a.blocks.filter((id) => id !== (this.references.get(msg.identity)||msg.identity)); });
         this.state(session); return ok;
       }
       if (msg.t === 'matching.create' || msg.t === 'matching.timeoutChoice') return fail(ERR.MATCH_STALE);
@@ -172,9 +173,7 @@ export class MatchmakingService {
     return result;
   }
   decorate(ctx, msg) {
-    if (!ctx.matching) return msg;
-    const publicMsg = { ...msg, ...(msg.players ? { players: msg.players.map(({ doctorCode, ...p }) => { void doctorCode; return p; }) } : {}) };
-    return msg.t === 'm.result' ? { ...publicMsg, isMatchingMatch: true, matching: { id: ctx.matching.id, generated: ctx.matching.generated, participants: ctx.matching.participants } } : publicMsg;
+    return ctx.matching && msg.t === 'm.result' ? { ...msg, matching: { id: ctx.matching.id, generated: ctx.matching.generated, participants: ctx.matching.participants.map(p=>({...p,identity:this.reference(p.identity),name:p.identity.replace(/#\d{4}$/,'')})) } } : msg;
   }
   settled(room, ctx, summary) {
     this.clearRoomReconnects(room); room.resultMatchingId = ctx.matching?.id || null; this.parties.settled(room);

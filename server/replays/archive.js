@@ -1,4 +1,5 @@
 // Capability-protected, atomic compressed archives survive process restarts.
+import { privacyRecord } from '../../shared/matchPrivacy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { gzipSync, gunzipSync } from 'node:zlib';
@@ -111,7 +112,7 @@ export class ReplayArchive {
       if (!record.trackMode) record=buildTrackIndex(this,record);
       if (field !== null || chunk !== null) return readTrackChunk(this,record,field,chunk);
     }
-    const { key: secret, ...safe } = summaryOnly ? { ...record, fields: [], events: [], communications: [], publicTrack: [], pauses: [], nodes: record.nodes?.length ? [{ ...record.nodes.at(-1), players: {} }] : [] } : record.trackMode ? record : unpackRecord(record); void secret; return safe;
+    const { key: secret, ...safe } = summaryOnly ? { ...record, fields: [], events: [], communications: [], publicTrack: [], pauses: [], nodes: record.nodes?.length ? [{ ...record.nodes.at(-1), players: {} }] : [] } : record.trackMode ? record : unpackRecord(record); void secret; return privacyRecord(safe);
   }
   getShared(code, options) {
     if (!/^[A-Za-z0-9_-]{16}$/.test(code || '')) return null;
@@ -120,6 +121,12 @@ export class ReplayArchive {
     if (!record) try { record = JSON.parse(gunzipSync(fs.readFileSync(this.file(id)))); } catch { return null; }
     if (record.shareCode !== code) return null;
     return this.get(id, record.key, options);
+  }
+  owns(id, key, playerId, name, code) {
+    if(!this.get(id,key,{summaryOnly:true}))return false;
+    let record=this.pending.get(id)||this.metadata(id);
+    if(!record)try{record=JSON.parse(gunzipSync(fs.readFileSync(this.file(id))));}catch{return false;}
+    return !!record.participants?.some(p=>p.playerId===playerId&&p.name===name&&p.doctorCode===code);
   }
   generationCompatible(record) {
     // A legacy content fingerprint is known only for the deployed v0.2.3 simulation.

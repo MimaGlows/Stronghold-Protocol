@@ -1,5 +1,8 @@
 /* Experimental matching UI: tactical terminal, inherited mint/graphite palette. */
 .matching-result { border:1px solid var(--line); background:var(--bg-1); padding:.18rem; margin:.12rem 0; }
+.lobby-screen.has-matching-party .lobby-body {padding-bottom:calc(var(--matching-queue-height, 0px) + .35rem);}
+/* Settings is mounted in the header. Do not trap its modal below the fixed queue. */
+.lobby-screen.has-matching-party .topbar {z-index:auto;}
 .matching-result h3 { color:var(--mint-500); font-size:calc(.22 * var(--t)); margin:0 0 .08rem; }
 .matching-result p { margin:.08rem 0; }
 .matching-account,.matching-block { display:flex; align-items:center; gap:.12rem; flex-wrap:wrap; }
@@ -106,7 +109,7 @@ html[data-matching-motion="full"] .matching-modal-host .btn,html[data-matching-m
 html[data-matching-motion="reduced"] .alliance-option,html[data-matching-motion="reduced"] .matching-modal-host .btn,html[data-matching-motion="reduced"] .matching-queue .btn { transition:none; }
 html[data-matching-motion="reduced"] .alliance-option.is-selected::after { animation:none; }
 html[data-matching-motion="reduced"] .alliance-option:hover,html[data-matching-motion="reduced"] .alliance-option:active { transform:none; }
-body.sp-alliance-picker .friends-handle { visibility:hidden; }
+.alliance-picker-open .friends-handle { visibility:hidden; }
 .matching-notice-text { font-size:max(14px,calc(.2 * var(--t))); line-height:1.6; color:var(--text-hi); }
 .modal__box.matching-notice .modal__title { font-size:max(20px,calc(.28 * var(--t))); }
 .modal__box.matching-notice .btn__label { font-size:max(14px,calc(.2 * var(--t))); }
@@ -129,7 +132,7 @@ body.sp-alliance-picker .friends-handle { visibility:hidden; }
 }
 .matching-queue,.matching-queue.is-searching { position:fixed; left:0; right:0; bottom:0; width:100%; max-width:none; margin:0; z-index:55; }
 /* Extra scroll range keeps lobby controls reachable; the fixed bar reserves no layout height. */
-.lobby-screen.has-matching-party .lobby-body { padding-bottom:3.5rem; }
+
 
 /* Confirmation stays above the new route briefly; it never captures input. */
 .matching-success { position:fixed; inset:auto 0 0; z-index:58; display:flex; align-items:center; gap:.24rem; min-height:1.8rem; padding:.28rem .52rem; color:#07271e; background:var(--mint-400); border-top:2px solid #c6ffee; overflow:hidden; pointer-events:none; }

@@ -26,13 +26,14 @@ export function callControl(record, action) {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const action = process.argv[2] || 'status';
-  if (!['status', 'stop', 'probe'].includes(action)) throw new Error('Use status or stop');
+  if (!['status', 'stop', 'stopIdle', 'probe', 'drain', 'resume'].includes(action)) throw new Error('Use status, stop, stopIdle, drain or resume');
   const record = readInstance(root);
   if (!record) { if (action === 'probe') process.exitCode = 1; else console.log('Experimental instance is not running'); }
   else {
     try {
       const result = await callControl(record, action === 'probe' ? 'status' : action);
-      if (action !== 'probe') console.log(`${action === 'stop' ? 'Graceful stop requested' : 'Running'}: ${result.url} (PID ${result.pid})`);
+      if(!result.ok){console.log('Active matches: experimental instance remains running');process.exitCode=1;}
+      else if (action !== 'probe') console.log(`${action.startsWith('stop') ? 'Graceful stop requested' : 'Running'}: ${result.url} (PID ${result.pid})`);
     } catch { if (action === 'probe') process.exitCode = 1; else console.log('Experimental instance is not running (stale process record)'); }
   }
 }

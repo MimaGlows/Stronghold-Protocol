@@ -64,7 +64,8 @@ export function BriefingScreen({ replay = null } = {}) {
       total=${phaseTotalSeconds(pub, gd.config)} replay=${replay} onExit=${replay?.onExit || (() => setExit(true))} />
     <main class="brief__main">
       <section class="brief__left">
-        <div class="brief-boss brackets">
+        <div class=${`brief-boss brackets ${pub.hiddenWar?'brief-boss--secret':''}`}>
+          ${pub.hiddenWar?html`<div class="hidden-intel"><${Icon} name="lock"/><strong>${t('隐秘战争生效')}</strong><span>${t('敌军与领袖预告已隐藏')}</span></div>`:null}
           <${MicroLabel} tone="gold">${t('ENEMY LEADER // 敌方领袖')}</${MicroLabel}>
           <div class="brief-boss__art">
             <div class="brief-boss__ring" aria-hidden="true"></div>
@@ -83,7 +84,7 @@ export function BriefingScreen({ replay = null } = {}) {
           <span class="brief-stage__k"><${MicroLabel}>BATTLEFIELD</${MicroLabel}>${pool ? html`<span class="brief-stage__pool">${pool}</span>` : null}</span>
           <span class="brief-stage__name"><${Icon} name="rook" />${stage?.name || pub.stageId || '—'}</span>
         </div>
-        <div class="brief-factions">
+        <div class=${`brief-factions ${pub.hiddenWar?'brief-factions--secret':''}`}>
           <h3 class="brief-h"><span>${t('特训敌人')}</span><${MicroLabel}>SPECIAL ENEMIES</${MicroLabel}></h3>
           ${types.length ? types.map((t) => html`<div key=${t} class="brief-faction">
             <span class="brief-faction__icon"><${Img} src=${factionIconUrl(m, factions[t]?.icon)} /></span>
@@ -92,7 +93,7 @@ export function BriefingScreen({ replay = null } = {}) {
         </div>
       </section>
       <section class="brief__right">
-        <${MatchInfo} model=${info} />
+        ${pub.hiddenWar?html`<div class="hidden-intel hidden-intel--bonds brackets"><${Icon} name="lock"/><strong>${t('隐秘战争生效')}</strong><span>${t('盟约启用与禁用信息已隐藏')}</span></div>`:html`<${MatchInfo} model=${info} />`}
       </section>
     </main>
     <${SetupReroll} pub=${pub} />

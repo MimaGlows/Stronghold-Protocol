@@ -4,6 +4,15 @@
    ========================================================================================== */
 
 .title-screen { align-items: center; justify-content: center; }
+@media(max-height:500px) and (min-width:600px){
+  .title-screen{justify-content:flex-start;overflow-y:auto;padding-top:38px;padding-bottom:24px}
+  .title-screen .title-main{margin-top:0;flex-shrink:0}
+  .title-screen .emblem{margin-bottom:8px}
+  .title-screen .emblem__svg{width:36px;height:38px}
+  .title-screen .emblem__bracket{height:42px}
+  .title-screen .title-cn{font-size:36px}
+  .title-screen .title-login{margin-top:14px;gap:6px;padding:10px 12px}
+}
 
 /* ---- backdrop ----------------------------------------------------------------------------------- */
 .title-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
@@ -207,7 +216,8 @@
 .title-login {
   --bk-c: var(--mint-500);
   position: relative;
-  width: 4.9rem;
+  width: max(4.9rem, 300px);
+  max-width: calc(100vw - 32px);
   margin-top: .42rem;
   display: flex;
   flex-direction: column;
@@ -263,8 +273,14 @@
 .title-lang.lang-select select { height: max(.3rem, 1.4em); font-size: calc(.14 * var(--t)); }
 html[data-script="alphabetic"] .title-login .btn--xl { letter-spacing: .3em; }
 .title-conn .ping { height: max(.26rem, 1.6em); font-size: calc(.15 * var(--t)); }
+.title-identity__hint, .title-conn, .title-conn .ping, .title-login label { font-size: max(12px, calc(.14 * var(--t))); }
+.title-tag, .title-guide, .title-identity .field__label { font-size: max(12px, calc(.16 * var(--t))); }
+.title-login .field__input { font-size: max(16px, calc(.22 * var(--t))); }
+.title-identity__inputs .field:last-child { flex-basis: max(1.05rem, 76px); }
+.title-login .btn--xl { min-height: 40px; font-size: max(16px, calc(.24 * var(--t))); }
 
 .title-foot {
+  pointer-events: none;
   position: absolute;
   z-index: 2;
   left: .44rem;
@@ -278,6 +294,7 @@ html[data-script="alphabetic"] .title-login .btn--xl { letter-spacing: .3em; }
   font-size: calc(.13 * var(--t));
   color: var(--text-dim);
 }
+.title-foot :is(a,button) { pointer-events: auto; }
 .title-foot__meta { display: flex; align-items: flex-end; gap: .16rem; flex-wrap: wrap; justify-content: flex-end; }
 .title-repo { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; }
 .title-repo:hover, .title-repo:focus-visible { color: var(--text-hi); border-bottom-color: currentColor; }

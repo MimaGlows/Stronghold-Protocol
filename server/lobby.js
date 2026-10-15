@@ -105,7 +105,9 @@ import { defaultProfilePreferences, sanitizeVoicePreferences } from '../shared/v
 //     a player seat (the seat is kept and given back on resume).
 
 import { randomBytes, randomInt } from 'node:crypto';
-import { ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { defaultCustom, checkCustom, customRoomName, customScore } from '../shared/custom.js';
+import { customScoreContext } from './match/custom.js';
+import { ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor, DIFFICULTIES } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks } from '../shared/protocol.js';
 import { encode, isDroppable, isErrCode, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
@@ -183,6 +185,10 @@ export class Room {
     this.shareCode = code;
     this.matchingRevision = 0;
     this.mode = mode;
+    this.custom = mode === 'custom' ? defaultCustom() : null;
+    this.customName = mode === 'custom' ? '自定房间' : null; // i18n-ignore: default stored room name
+    this.customRevision = 0;
+    this.matchPrivacy = false;
     this.difficulty = difficulty;
     /**
      * 「AI 队友最后选择」 (room.setAiPicksLast, GitHub #338; co-op only, off by default): the match's strategy and 机变 drafts
@@ -241,16 +247,21 @@ export class Room {
       code: this.shareCode,
       hostId: this.hostId,
       mode: this.mode,
+      custom: this.custom, name: this.customName, revision: this.customRevision, capacity: this.mode === 'solo' ? 1 : this.seats.length,
+      matchPrivacy: this.matchPrivacy || this.queueGenerated,
+      scoreContext:this.scoreContext||null,
+      ...(this.custom?{scoreContexts:this.scoreContexts||null}:{}),
+      customEvaluation: this.custom ? customScore(this.custom,this.difficulty,this.scoreContext?{...this.scoreContext,coreIds:new Set(this.scoreContext.coreIds)}:undefined) : null,
       difficulty: this.difficulty,
       aiPicksLast: this.aiPicksLast,
       inMatch: !!this.match,
       matching: {
-        enabled: this.matchmaking, revision: this.matchingRevision, rules: this.matchmaking || this.queueGenerated || (!!this.match && !!this.matchCtx?.matching), generated: this.queueGenerated, phase: this.matchQueue?.phase || 'idle', attemptId: this.matchQueue?.id || null, deadline: this.matchQueue?.deadline || 0,
+        enabled: this.matchmaking, revision: this.matchingRevision, rules: this.matchmaking || this.queueGenerated || this.activeHumans().some((s)=>s.matchingSource) || (!!this.match && !!this.matchCtx?.matching), generated: this.queueGenerated, phase: this.matchQueue?.phase || 'idle', attemptId: this.matchQueue?.id || null, deadline: this.matchQueue?.deadline || 0,
         permissions: { hostId: this.hostId, edit: !this.match && !this.matchQueue, start: this.matchmaking && !this.match && !this.matchQueue,
           cancel: !!this.matchQueue, choose: this.matchQueue?.phase === 'decision' },
       },
       seats: this.seats.map((s) => (s
-        ? { seat: s.seat, playerId: s.playerId, name: s.name, ...(!(this.matchmaking || this.queueGenerated || this.matchCtx?.matching && this.match) && s.doctorCode ? { doctorCode: s.doctorCode } : {}), ...((this.matchmaking || this.queueGenerated || (!!this.match && !!this.matchCtx?.matching)) ? { preference: s.preference || null, preferenceSelected: !!s.preferenceSelected } : {}), avatar: (this.matchmaking || this.queueGenerated || (!!this.match && !!this.matchCtx?.matching)) && s.avatar?.kind === 'custom' ? MATCHING_AVATAR : s.avatar || DEFAULT_AVATAR, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left }
+        ? { seat: s.seat, playerId: s.playerId, name: s.name, ...(!(this.matchPrivacy || this.queueGenerated || this.matchmaking || this.matchCtx?.matching && this.match) && s.doctorCode ? { doctorCode: s.doctorCode } : {}), ...((this.matchmaking || this.queueGenerated || (!!this.match && !!this.matchCtx?.matching)) ? { preference: s.preference || null, preferenceSelected: !!s.preferenceSelected } : {}), avatar: (this.matchmaking || this.queueGenerated || (!!this.match && !!this.matchCtx?.matching)) && s.avatar?.kind === 'custom' ? MATCHING_AVATAR : s.avatar || DEFAULT_AVATAR, isBot: s.isBot, ready: s.ready, connected: s.connected && !s.left }
         : null)),
       spectators: this.spectators.map((s) => ({ playerId: s.playerId, name: s.name, connected: s.connected })),
     };
@@ -279,6 +290,7 @@ export class Lobby {
     this.now = now;
     this.seedFn = seedFn || (() => randomInt(2 ** 32));
     this.opts = { ...LOBBY_DEFAULTS, ...options };
+    this.maintenance = options.maintenance === true;
     /** @type {Map<string, Room>} */
     this.rooms = new Map();
     /** @type {Map<string, NodeJS.Timeout>} lobby grace timers by playerId */
@@ -305,7 +317,7 @@ export class Lobby {
       for (const s of r.seats) if (s && !s.left) (s.isBot ? bots++ : humans++);
       spectators += r.spectators.length;
     }
-    return { rooms: this.rooms.size, matches, humans, bots, spectators };
+    return { rooms: this.rooms.size, matches, humans, bots, spectators, ...(this.maintenance?{maintenance:true}:{}) };
   }
 
   // ---------------------------------------------------------------------------------------------------
@@ -375,6 +387,8 @@ export class Lobby {
    * @returns {{ ok: true } | { error: string, detail?: string }}
    */
   onMessage(session, msg) {
+    if(this.shuttingDown)return fail(ERR.WRONG_PHASE);
+    if(this.maintenance&&(['room.start','matching.prepare','matching.start'].includes(msg.t)||msg.t==='matching.ready'&&msg.ready))return fail(ERR.MAINTENANCE);
     if (msg.t.startsWith('matching.')) return this.matchmakingService.handle(session, msg);
     const party = this.matchmakingService.parties.of(session);
     if (party && ['room.create','room.join','room.spectate','room.loadout','room.ownership','room.diy'].includes(msg.t)) {
@@ -395,6 +409,8 @@ export class Lobby {
       case 'profile.avatar': return this.setAvatar(session, msg);
       case 'profile.records': return this.restoreRecords(session, msg);
       case 'room.create': return this.create(session, msg);
+      case 'room.custom': return this.setCustom(session,msg);
+      case 'room.seat': return this.chooseSeat(session,msg);
       case 'room.join': return this.join(session, msg);
       case 'room.leave': return this.leave(session);
       case 'room.ready': return this.ready(session, msg);
@@ -423,7 +439,7 @@ export class Lobby {
     if (!session.profile || !this.profiles || !this.replayArchive) return fail(ERR.BAD_TARGET, 'profile unavailable');
     // A capability alone is not enough: the archived participant must match this callsign/code.
     const accepted = entries.map((e) => ({ entry: e, record: this.replayArchive.get(e.id, e.key, { summaryOnly: true }) }));
-    if (accepted.some(({ entry, record }) => !record?.result || !record.participants.some((p) => p.playerId === entry.playerId && p.name === session.name && p.doctorCode === session.doctorCode))) return fail(ERR.BAD_TARGET, 'record owner mismatch');
+    if (accepted.some(({ entry, record }) => !record?.result || !(this.replayArchive.owns ? this.replayArchive.owns(entry.id,entry.key,entry.playerId,session.name,session.doctorCode) : record.participants.some((p) => p.playerId === entry.playerId && p.name === session.name && p.doctorCode === session.doctorCode)))) return fail(ERR.BAD_TARGET, 'record owner mismatch');
     try {
       for (const { entry, record } of accepted.reverse()) session.profile = this.profiles.remember(session.profile, { id: entry.id, key: entry.key, startedAt: record.startedAt, expiresAt: record.expiresAt }, entry.playerId, record.result);
       sendSession(session, { t: 'profile.history', profileKey: `${session.name}#${session.doctorCode}`, history: session.profile.history });
@@ -523,7 +539,14 @@ export class Lobby {
    * Dispose every room (notifying members with room.closed) — used on server shutdown.
    * @param {string} [reason]
    */
+  setMaintenance(enabled){
+    this.maintenance=!!enabled;
+    if(!enabled)this.matchmakingService.parties.pump();
+    return this.stats();
+  }
+
   shutdown(reason = 'shutdown') {
+    this.shuttingDown=true;
     this.matchmakingService.close();
     this.social.close();
     for (const room of [...this.rooms.values()]) this.disposeRoom(room, reason);
@@ -550,7 +573,7 @@ export class Lobby {
         return fail(ERR.RATE, 'too many rooms from your network');
       }
     }
-    const code = this.genCode();
+    const code = this.genCode(mode === 'custom' ? 5 : ROOM_CODE_LEN);
     if (!code) return fail(ERR.INTERNAL, 'no room code available');
     if (cur) this.removeMember(cur, session.playerId);
     const room = new Room(code, mode, difficulty, this.now());
@@ -566,21 +589,42 @@ export class Lobby {
     return OK;
   }
 
+  checkRoomTransition(session,{replaceCurrent=false,source=null}={}){
+    const cur=this.roomOf(session),parties=this.matchmakingService.parties,p=parties.of(session)||this.matchmakingService.partyForIdentity(session);
+    const identity=this.matchmakingService.identity(session);
+    if([...parties.parties.values()].some(q=>q!==p&&q.members.some(m=>m.identity===identity)))return fail(ERR.MATCH_LOCKED);
+    if(p&&p.phase==='playing')return fail(ERR.ROOM_STARTED);
+    if(p&&!replaceCurrent)return fail(ERR.MATCH_LOCKED);
+    if(replaceCurrent&&(!source||source.roomCode!==(cur?.shareCode||null)||source.roomRevision!==(cur?.customRevision||cur?.matchingRevision||0)||source.partyId!==(p?.id||null)||source.partyRevision!==(p?.revision||0))){this.matchmakingService.state(session);return fail(ERR.MATCH_STALE);}
+    return OK;
+  }
+  completeRoomTransition(session,exceptInvite=null){
+    this.matchmakingService.parties.leaveIdentity(session);
+    this.clearConflictingInvites(session,exceptInvite);
+  }
+  clearConflictingInvites(session,exceptInvite=null){
+    const identity=this.matchmakingService.identity(session);
+    for(const invite of [...this.social.invites.values()])if(invite.to===identity&&invite.id!==exceptInvite)this.social.end(invite,'expired');
+    const parties=this.matchmakingService.parties,changed=new Set();
+    for(const invite of [...parties.invites.values()])if(invite.to===identity){changed.add(parties.parties.get(invite.partyId));parties.endInvite(invite,'expired');}
+    for(const party of changed)if(party)parties.publish(party);
+  }
   publicRoom(code) {
     const norm = String(code).trim().toUpperCase();
-    return norm.length === ROOM_CODE_LEN ? [...this.rooms.values()].find((r) => r.shareCode === norm && !r.disposed) : undefined;
+    return [ROOM_CODE_LEN, 5].includes(norm.length) ? [...this.rooms.values()].find((r) => r.shareCode === norm && !r.disposed) : undefined;
   }
 
-  join(session, { code }) {
-    return this.joinRoom(session, this.publicRoom(code));
+  join(session, { code, ...options }, { preserveParty = false } = {}) {
+    return this.joinRoom(session, this.publicRoom(code), { ...options, preserveParty });
   }
 
-  joinRoom(session, room, { leaveParty = false } = {}) {
+  joinRoom(session, room, { leaveParty = false, preserveParty = false, replaceCurrent = false, source = null, acceptedInviteId = null } = {}) {
     if (!room || room.disposed || this.rooms.get(room.code) !== room) return fail(ERR.ROOM_NOT_FOUND);
     const cur = this.roomOf(session);
     // idempotent for members; a spectator of this room goes on below: it may take a free player seat (header)
     if (cur === room && !room.spectatorOf(session.playerId)) { this.sendState(room, session); return OK; }
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
+    if (!preserveParty) { const transition=this.checkRoomTransition(session,{replaceCurrent,source});if(transition.error)return transition; }
     if (room.match) return fail(ERR.ROOM_STARTED);
     if (room.mode === 'solo') return fail(ERR.ROOM_FULL, 'solo room');
     if (room.matchQueue) return fail(ERR.MATCH_LOCKED);
@@ -593,6 +637,7 @@ export class Lobby {
     const idx = room.freeSeat();
     if (idx < 0) return fail(ERR.ROOM_FULL);
     if (leaveParty) this.matchmakingService.parties.leaveIdentity(session);
+    if (!preserveParty) this.completeRoomTransition(session, acceptedInviteId);
     if (this.roomOf(session)) this.removeMember(this.roomOf(session), session.playerId);
     room.seats[idx] = this.humanSeat(idx, session);
     session.roomCode = room.code;
@@ -614,11 +659,11 @@ export class Lobby {
    * room.spectate: one of either room mode's MAX_SPECTATORS spectator seats, in its lobby or during its match (header). In a
    * running match the match registers the spectator and resends what it may see (Match.addSpectator).
    */
-  spectate(session, { code }) {
-    return this.spectateRoom(session, this.publicRoom(code));
+  spectate(session, { code, ...options }) {
+    return this.spectateRoom(session, this.publicRoom(code), options);
   }
 
-  spectateRoom(session, room) {
+  spectateRoom(session, room, {replaceCurrent=false,source=null}={}) {
     if (!room || room.disposed || this.rooms.get(room.code) !== room) return fail(ERR.ROOM_NOT_FOUND);
     const cur = this.roomOf(session);
     if (cur === room) {
@@ -627,8 +672,10 @@ export class Lobby {
       return OK;
     }
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
+    const transition=this.checkRoomTransition(session,{replaceCurrent,source});if(transition.error)return transition;
     if (room.spectators.length >= MAX_SPECTATORS) return fail(ERR.ROOM_FULL, 'no free spectator seat');
     if (room.matchQueue) return fail(ERR.MATCH_LOCKED);
+    this.completeRoomTransition(session);
     if (cur) this.removeMember(cur, session.playerId);
     room.spectators.push({ playerId: session.playerId, name: session.name, connected: session.connected });
     session.roomCode = room.code;
@@ -672,6 +719,35 @@ export class Lobby {
     return OK;
   }
 
+  setCustom(session, {config,name,revision,difficulty}) {
+    const room=this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId!==session.playerId) return fail(ERR.NOT_HOST);
+    if (room.mode!=='custom' || room.match) return fail(ERR.ROOM_STARTED);
+    if (revision!==room.customRevision) return fail(ERR.MATCH_STALE);
+    const checked=checkCustom(config,this.safeData().bonds), checkedName=customRoomName(name);
+    if (!checked || !checkedName || (difficulty!==undefined&&!DIFFICULTIES.includes(difficulty))) return fail(ERR.BAD_MSG);
+    if (room.seats.filter(Boolean).length>checked.capacity) return fail(ERR.ROOM_FULL);
+    const kept=Array.from({length:checked.capacity},(_,i)=>room.seats[i]||null);
+    for(const seat of room.seats.slice(checked.capacity).filter(Boolean)){const i=kept.findIndex(s=>!s);seat.seat=i;kept[i]=seat;}
+    room.seats=kept;
+    this.dropReplay(room,session.playerId);
+    room.custom=checked; room.customName=checkedName; room.difficulty=difficulty??room.difficulty; room.customRevision++;
+    for (const s of room.activeHumans()) s.ready=false;
+    this.broadcastState(room); return OK;
+  }
+  chooseSeat(session, {seat,revision}) {
+    const room=this.roomOf(session), me=room?.seatOf(session.playerId);
+    if (!room || !me) return fail(ERR.NOT_IN_ROOM);
+    if (room.mode!=='custom' || room.match) return fail(ERR.ROOM_STARTED);
+    if (revision!==room.customRevision) return fail(ERR.MATCH_STALE);
+    if (seat>=room.seats.length) return fail(ERR.BAD_TARGET);
+    if (me.seat===seat) return OK;
+    if (room.seats[seat]) return fail(ERR.ROOM_FULL);
+    room.seats[me.seat]=null; me.seat=seat; me.ready=false; room.seats[seat]=me;
+    room.customRevision++; this.broadcastState(room); return OK;
+  }
+
   setDifficulty(session, { difficulty }) {
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
@@ -680,8 +756,9 @@ export class Lobby {
     this.dropReplay(room, session.playerId);
     if (room.difficulty !== difficulty) {
       room.difficulty = difficulty;
+      if(room.custom)room.customRevision++;
       room.matchingRevision++;
-      // Only this room's choices are invalidated; preserve the account preference for a possible return to its queue.
+      // Preserve the account's queue preference when the receiving room changes difficulty.
       for (const s of room.activeHumans()) if (!validPreference(this.safeData(), difficulty, s.preference)) {
         s.preference = null; s.preferenceSelected = false;
         this.sendToPlayer(room, s.playerId, { t: 'm.toast', kind: 'warn', text: N_('切换难度后，原阵营偏好不可用，已清空') });
@@ -765,6 +842,7 @@ export class Lobby {
   }
 
   start(session) {
+    if(this.maintenance)return fail(ERR.MAINTENANCE);
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
@@ -790,7 +868,7 @@ export class Lobby {
   rerollSetup(session, msg, cancel = false) {
     const room = this.roomOf(session);
     if (!room) return fail(ERR.NOT_IN_ROOM);
-    if (room.matchCtx?.matching) return fail(ERR.MATCH_LOCKED);
+    if (room.mode==='custom'||room.matchmaking||room.queueGenerated||room.matchPrivacy||room.matchCtx?.matching) return fail(ERR.MATCH_LOCKED);
     if (room.spectatorOf(session.playerId)) return fail(ERR.SPECTATOR);
     if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
     const method = cancel ? 'cancelSetupReroll' : 'requestSetupReroll';
@@ -886,6 +964,7 @@ export class Lobby {
 
   /** @param {Room} room @param {string | null} [key] per-network limit key of the starter */
   startMatch(room, key = null) {
+    if(this.maintenance)return fail(ERR.MAINTENANCE);
     const host = room.seatOf(room.hostId);
     if (host) host.ready = true;
     const seats = room.seats.filter(Boolean).map((s) => ({
@@ -909,6 +988,7 @@ export class Lobby {
         createRecorder: this.replayArchive ? (match) => this.replayArchive.create(match) : null,
         roomCode: room.code,
         mode: room.mode,
+        customConfig: room.custom, roomName: room.customName, matchPrivacy: room.matchPrivacy || room.queueGenerated || !!ctx.matching,
         difficulty: room.difficulty,
         modeId: modeIdFor(room.mode, room.difficulty),
         // 「AI 队友最后选择」 (GitHub #338): fixed for the match
@@ -967,6 +1047,7 @@ export class Lobby {
     if (ctx.ended || !ctx.live || room.matchCtx !== ctx || room.disposed) return;
     ctx.ended = true;
     room.lastSummary = summary ?? null;
+    room.matchPrivacy=room.matchPrivacy||room.queueGenerated||room.activeHumans().some(s=>s.matchingSource);
     room.match = null;
     room.matchCtx = null;
     room.matchKey = null;
@@ -1337,10 +1418,10 @@ export class Lobby {
     room.shareCode = null;
   }
 
-  genCode() {
+  genCode(length = ROOM_CODE_LEN) {
     for (let attempt = 0; attempt < 1000; attempt++) {
       let code = '';
-      for (let i = 0; i < ROOM_CODE_LEN; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+      for (let i = 0; i < length; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
       if (!this.rooms.has(code) && !this.retiredShareCodes?.has(code) && ![...this.rooms.values()].some((r) => r.shareCode === code)) return code;
     }
     return null;
@@ -1360,6 +1441,7 @@ export class Lobby {
   }
 
   broadcastState(room) {
+    this.updateCustomScoreContext(room);
     for (const seat of room.activeHumans()) { const member = this.registry.byId(seat.playerId); if (member) this.matchmakingService.state(member); }
     queueMicrotask(() => this.matchmakingService.parties.pump());
     if (room.disposed) return;
@@ -1370,7 +1452,18 @@ export class Lobby {
   }
 
   sendState(room, session) {
+    this.updateCustomScoreContext(room);
     sendSession(session, room.toState());
+  }
+
+  updateCustomScoreContext(room){
+    if(!room.custom)return;
+    const count=room.seats.filter(Boolean).length;
+    if(!room.scoreContexts||room.scorePlayers!==count){
+      room.scoreContexts=Object.fromEntries(DIFFICULTIES.map(d=>[d,customScoreContext(this.safeData(),d,count)]));
+      room.scorePlayers=count;
+    }
+    room.scoreContext=room.scoreContexts[room.difficulty];
   }
 
   /** Match broadcast: encode once, send to every connected member. @returns {string | null} the encoded frame */

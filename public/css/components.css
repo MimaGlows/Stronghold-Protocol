@@ -446,6 +446,7 @@
   backdrop-filter: blur(3px);
   animation: modal-fade var(--t-med) var(--ease-out);
 }
+.dialog-host .modal { z-index: calc(var(--z-modal) + 10); }
 .modal__box {
   --bk-c: var(--mint-500);
   --mstripe: var(--mint-500);

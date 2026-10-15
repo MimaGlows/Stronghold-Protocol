@@ -5,8 +5,8 @@ export const MATCHING_AVATAR = Object.freeze({ kind: 'operator', charId: 'char_4
 export const AVATAR_SIZE = 256;
 export const AVATAR_MAX_BYTES = 24 * 1024;
 export const AVATAR_INPUT_MAX_BYTES = 5 * 1024 * 1024;
-// Allow the old and new base64 cookie generations while saving; WebSocket payloads still cap at 64 KiB.
-export const AVATAR_COOKIE_HEADER_LIMIT = 80 * 1024;
+// Allow independent avatar cookie generations for all three local instances while saving; WebSocket payloads still cap at 64 KiB.
+export const AVATAR_COOKIE_HEADER_LIMIT = 256 * 1024;
 const PREFIX = 'data:image/webp;base64,';
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 

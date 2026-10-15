@@ -11,7 +11,8 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -30,16 +31,18 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
   let srv;
   let browser;
   let base;
+  let profileDir;
 
   before(async () => {
     const { startServer } = await import('../../server/index.js');
     const puppeteer = (await import('puppeteer-core')).default;
-    srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true });
+    profileDir=mkdtempSync(path.join(os.tmpdir(),'sp-loadout-profiles-'));
+    srv = await startServer({ port: 0, host: '127.0.0.1', quiet: true, profileDir });
     base = `http://127.0.0.1:${srv.port}`;
     browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
     mkdirSync(OUT, { recursive: true });
   });
-  after(async () => { await browser?.close(); await srv?.close(); });
+  after(async () => { await browser?.close(); await srv?.close();if(profileDir)rmSync(profileDir,{recursive:true,force:true}); });
 
   async function open({ w = 1920, h = 1080, touch = false } = {}) {
     const ctx = await browser.createBrowserContext();
@@ -260,6 +263,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
 
   test('solo briefing: an edit made right before 准备就绪 still applies to this match (closing the overlay sends it)', async () => {
     const { ctx, page, problems } = await open();
+    await page.evaluate(()=>{globalThis.__readyTrace=[];const n=globalThis.__SP__.net,original=n._request.bind(n);n._request=(type,fields,opts)=>{const row={type,at:Date.now()};globalThis.__readyTrace.push(row);return original(type,fields,opts).then(r=>{row.done=true;return r;},e=>{row.error=e.message;throw e;});};});
     await page.evaluate(() => globalThis.__SP__.net.request('room.create', { mode: 'solo', difficulty: 'NORMAL' }));
     await waitSt(page, (s) => !!s.room, 'room');
     await page.evaluate(() => globalThis.__SP__.net.request('room.start', {}));
@@ -276,7 +280,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForFunction(() => !document.querySelector('.lo'), { timeout: 3000 });
     await page.click('.brief__foot .btn--primary');
     const s = await waitSt(page, (x) => x.phase && x.phase !== 'INFO_CHECK' && x.loadout && x.loadout[INSIDE], 'band draft with the loadout', 8000)
-      .catch(async (e) => { throw new Error(`${e.message} — last loadout ${JSON.stringify((await st(page)).loadout)}`); });
+      .catch(async (e) => {await page.screenshot({path:path.join(OUT,'ready-diagnostic.png')});console.log('ready trace',await page.evaluate(()=>({trace:globalThis.__readyTrace,button:document.querySelector('.brief__foot .btn--primary')?.outerHTML,toast:[...document.querySelectorAll('.toast')].map(e=>e.textContent)})));throw new Error(`${e.message} — last loadout ${JSON.stringify((await st(page)).loadout)}`); });
     assert.equal(s.loadout[INSIDE].skill, 0, 'the match fights with the edit made just before 准备就绪');
     assert.deepEqual(problems, []);
     await ctx.close();
@@ -317,7 +321,7 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
           const right = document.querySelector('.lo-top__right').getBoundingClientRect();
           const center = document.querySelector('.lo-top__center').getBoundingClientRect();
           const buttons = [...document.querySelectorAll('.lo-top__right .btn')].map((b) => Math.round(b.getBoundingClientRect().right));
-          return { overflow: top.scrollWidth - top.clientWidth, overlap: right.left < center.right, offscreen: right.right > innerWidth, tabsCut: tabs.scrollWidth - tabs.clientWidth, buttons };
+          return { overflow: top.scrollWidth - top.clientWidth, overlap: right.left < center.right && right.top < center.bottom && right.bottom > center.top, offscreen: right.right > innerWidth, tabsCut: tabs.scrollWidth - tabs.clientWidth, buttons };
         });
         const at = `${lang} ${w}×${h} ${JSON.stringify(bar)}`;
         assert.ok(bar.overflow <= 0, `the top bar does not scroll sideways (${at})`);
@@ -333,14 +337,13 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     await page.waitForFunction(() => document.querySelectorAll('.lo-card').length === 1, { timeout: 5000 });
     await page.click('.lo-card__pick');
     await page.waitForSelector('.lo-detail .lo-skill[data-skill="0"]', { visible: true });
-    // edit, and the briefing ends before the debounced send (every human ready: the requests stand in for the timer)
+    // Account preferences now flush before readiness; an immediate confirmation must include the edit.
     await page.click('.lo-detail .lo-skill[data-skill="0"]');
     await mate.page.evaluate(() => globalThis.__SP__.net.request('g.infoReady', {}));
     await page.evaluate(() => globalThis.__SP__.net.request('g.infoReady', {}));
     await page.waitForFunction(() => !document.querySelector('.lo'), { timeout: 5000 });
-    await page.waitForFunction(() => [...document.querySelectorAll('.toast__text')].some((e) => /下一局生效/.test(e.textContent)), { timeout: 5000 });
     const s = await st(page);
-    assert.ok(!s.loadout || !s.loadout[INSIDE], 'the running match kept its locked loadout');
+    assert.equal(s.loadout?.[INSIDE]?.skill,0,'preference flush completed before information confirmation');
     const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.pref.loadout')));
     assert.deepEqual(stored.entries[INSIDE], { skill: 0 }, 'kept for the next match');
     assert.deepEqual(problems, []);
@@ -367,7 +370,8 @@ describe('干员调配 overlay (real server, headless Chrome)', { skip: !ENABLED
     })));
     assert.deepEqual(tiles.map((t) => t.type).sort(), ['PRI-X', 'PRI-Y']);
     if (localModuleIcons()) {
-      for (const t of tiles) assert.match(t.src || '', new RegExp(`^/assets/local/module/${t.type}\\.png$`, 'i'), JSON.stringify(t));
+      // the served manifest carries the file's content hash as the first segment (0.2.6, host bandwidth layer 1)
+      for (const t of tiles) assert.match(t.src || '', new RegExp(`^/assets/(?:~[0-9a-f]{16}/)?local/module/${t.type}\\.png$`, 'i'), JSON.stringify(t));
       assert.ok(await page.$('.lo-minfo__title .lo-minfo__icon'), 'the selected module\'s info shows its icon too');
     } else {
       for (const t of tiles) assert.equal(t.letter, t.type.slice(-1), JSON.stringify(t));

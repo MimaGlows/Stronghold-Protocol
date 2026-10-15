@@ -17,10 +17,10 @@ import { ROOT } from './config.js';
  *
  * The browser also imports `/sim/` from `server/sim/` and `/shared/`, and caches JSON from `/data/`. Include those
  * trees so a simulation-only or data-only deploy reaches old pages after the server restarts. `buildTag()` caches
- * this fingerprint for the process lifetime: files changing on disk do not advertise a new build before restart.
+ * this fingerprint for the process lifetime: identical bytes produce identical builds in separate instances; files changing on disk do not advertise a new build before restart.
  * The rest of `server/` and downloaded media are not included.
  */
-export const BUILD_INPUTS = Object.freeze(['public/index.html', 'public/js', 'public/css', 'server/sim', 'shared', 'data']);
+export const BUILD_INPUTS = Object.freeze(['public/index.html', 'public/instance.js', 'public/manifest.json', 'public/i18n', 'public/js', 'public/css', 'server/sim', 'shared', 'data']);
 
 /** Names the static server never serves: dot files (`.DS_Store`, `.main.js.swp`) and editor backups (`main.js~`). */
 const isIgnoredBuildName = (name) => name.startsWith('.') || name.endsWith('~');
@@ -45,14 +45,14 @@ function buildEntries(abs, rel, out) {
   }
 }
 
-/** Short hash of the served browser runtime (size + mtime of every BUILD_INPUTS file); null when nothing is readable. */
+/** Short hash of the served browser runtime (content of every BUILD_INPUTS file); null when nothing is readable. */
 export function computeBuildTag(root = ROOT) {
   const out = [];
   for (const rel of BUILD_INPUTS) buildEntries(path.join(root, rel), rel, out);
   if (!out.length) return null;
   out.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const h = createHash('sha1');
-  for (const [rel, size, mtime] of out) h.update(`${rel}\0${size}\0${Math.floor(mtime)}\n`);
+  for (const [rel] of out) h.update(rel+'\0').update(fs.readFileSync(path.join(root,rel))).update('\0');
   return h.digest('hex').slice(0, 12);
 }
 

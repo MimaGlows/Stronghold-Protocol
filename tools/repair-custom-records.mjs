@@ -1,0 +1,11 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {repairCustomRecords} from '../server/profiles/customMetadata.js';
+const arg=name=>process.argv.find(v=>v.startsWith(`--${name}=`))?.slice(name.length+3);
+const root=arg('root'),output=arg('report'),apply=process.argv.includes('--apply');
+if(!root||!output)throw Error('Usage: --root=INSTANCE --report=FILE [--apply --offline --backup=DIR]');
+if(apply&&(!process.argv.includes('--offline')||!arg('backup')))throw Error('Apply requires --offline and --backup after managed shutdown');
+const replayDir=path.join(path.resolve(root),'logs/replays');
+const report=repairCustomRecords({profileDir:path.join(replayDir,'profiles'),replayDir,apply,backupDir:arg('backup')});
+fs.mkdirSync(path.dirname(path.resolve(output)),{recursive:true});fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n');
+console.log(JSON.stringify({...report,records:report.records.length}));

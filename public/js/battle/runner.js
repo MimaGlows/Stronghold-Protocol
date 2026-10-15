@@ -296,7 +296,7 @@ export function createBattleRunner(deps) {
     e.leakMark = mark;
     let n = e.leaks;
     try { n = Math.max(0, Math.trunc(Number(e.sim.spec.battleProgress(b).leaks) || 0)); } catch { /* keep the last count */ }
-    if (n !== e.leaks) { e.leaks = n; leaksDirty = true; }
+    if (n !== e.leaks) { e.leaks = n; leaksDirty = true; e.lifeProgressDirty=true; }
   }
 
   function noteUniteLeft(e) {
@@ -306,7 +306,7 @@ export function createBattleRunner(deps) {
     e.leakMark = mark;
     let left = e.left;
     try { left = e.sim.spec.uniteLeft(b) || left; } catch { /* keep the last count */ }
-    if (JSON.stringify(left) !== JSON.stringify(e.left)) { e.left = left; leaksDirty = true; }
+    if (JSON.stringify(left) !== JSON.stringify(e.left)) { e.left = left; leaksDirty = true; e.lifeProgressDirty=true; }
   }
 
   /**
@@ -437,9 +437,10 @@ export function createBattleRunner(deps) {
   function progress(e, force = false) {
     if (!e.authoritative || e.resultSent || !net) return;
     const t = now();
-    const every = bossLike(e) ? 250 : 1000;
+    const every = e.lifeProgressDirty ? 100 : bossLike(e) ? 250 : 1000;
     if (!force && t - e.lastProgressAt < every) return;
     e.lastProgressAt = t;
+    e.lifeProgressDirty=false;
     const p = e.sim.spec.battleProgress(e.battle);
     const msg = { battleId: e.battleId, gt: Math.min(1e5, p.gt), killed: Math.min(p.killed, p.total), total: Math.min(1e5, p.total), done: !!p.done };
     // the HUD capsule's numerator of this field (shared/protocol.js b.progress `resolved`): the field's own scheduled

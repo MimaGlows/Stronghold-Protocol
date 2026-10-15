@@ -143,9 +143,11 @@ export class MatchCombat {
       this._collectSimErrors(f, res);
       for (const pid of f.players) {
         const pp = res.perPlayer && res.perPlayer[pid];
-        this.lastResults.set(pid, pp || { killed: 0, total: 0, leaked: [], perfect: true, layerGains: {}, coins: 0, damageDealt: 0, unitsEnd: [], unitStats: [] });
+        if(this.customConfig?.fateWager&&pp&&(res.synthetic||res.errors>0))pp.synthetic=true;
+        this.lastResults.set(pid, pp || { killed: 0, total: 0, leaked: [], perfect: true, layerGains: {}, coins: 0, damageDealt: 0, unitsEnd: [], unitStats: [], ...(this.customConfig?.fateWager?{synthetic:true}:{}) });
         // the views show the layers the battle reached until settle() makes them persistent (DESIGN §20.15)
         const ps = this.players.get(pid);
+        if(this.customConfig&&ps&&pp?.customRemainders){ps.customRemainders ||= {};for(const [id,v]of Object.entries(pp.customRemainders))ps.customRemainders[`layers:${id}`]=Math.round(v*100);}
         const gains = pp && pp.layerGains && typeof pp.layerGains === 'object' ? pp.layerGains : null;
         if (ps && gains && Object.keys(gains).length) { ps.pendingLayerGains = { ...gains }; ps.dirty(); }
       }

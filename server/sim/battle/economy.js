@@ -29,6 +29,7 @@ export class BattleEconomy {
     const source = opts.source ?? null;
     const ctx = { playerId, bondId, n, reason, source, tile: Array.isArray(opts.tile) ? opts.tile : this._sourceTile(source) };
     if (this._hooks.layerGain) { this.emit('layerGain', ctx); if (!(ctx.n > 0) || !Number.isFinite(ctx.n)) return 0; }
+    if(this.flags.custom){pp.customRemainders ||= {};const v=ctx.n*this.flags.custom.layers+(pp.customRemainders[bondId]||0);ctx.n=Math.floor(v+1e-9);pp.customRemainders[bondId]=v-ctx.n;}
     const add = layerGainRoom(live, ctx.n);
     if (!(add > 0)) return 0;
     pp.layerGains[bondId] = (pp.layerGains[bondId] ?? 0) + add;

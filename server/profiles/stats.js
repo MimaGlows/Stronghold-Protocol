@@ -1,4 +1,5 @@
 // Server-owned statistics. Account identity is established by the existing session, never by a client write.
+import { privacyRecord } from '../../shared/matchPrivacy.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
@@ -24,11 +25,16 @@ export class AccountStats {
     try { return JSON.parse(gunzipSync(fs.readFileSync(this.archive.file(id)))); } catch { return null; }
   }
   migrate() {
-    const archives = this.archive && fs.existsSync(this.archive.dir) ? fs.readdirSync(this.archive.dir).filter((f) => f.endsWith('.json.gz')).map((f) => this.rawArchive(f.slice(0, -8))).filter(Boolean) : [];
-    for (const p of this.allProfiles()) {
-      if (p.statistics?.v === 1) continue;
-      const records = [];
-      for (const a of archives) {
+    const profiles = this.allProfiles().filter((p) => p.statistics?.v !== 1);
+    if (!profiles.length) return;
+    const migrated = new Map(profiles.map((p) => [p, []]));
+    const files = this.archive && fs.existsSync(this.archive.dir) ? fs.readdirSync(this.archive.dir).filter((f) => f.endsWith('.json.gz')) : [];
+    // Read one replay at a time. Full combat tracks must never accumulate across the archive.
+    for (const file of files) {
+      const a = this.rawArchive(file.slice(0, -8));
+      if (!a) continue;
+      for (const p of profiles) {
+        const records = migrated.get(p);
         const who = a.participants?.find((x) => !x.isBot && x.name === p.name && x.doctorCode === p.code);
         if (!who || !a.result?.players?.length) continue;
         const rec = buildRecord(a.result, { myId: who.playerId, now: a.endedAt || a.startedAt });
@@ -42,6 +48,9 @@ export class AccountStats {
         if (rec.end !== 'quit') rec.replay = this.ticket(p, a);
         records.push(rec);
       }
+    }
+    for (const p of profiles) {
+      const records = migrated.get(p);
       // Missing legacy bodies still leave an account-owned list entry; never fabricate combat totals.
       for (const entry of p.history || []) {
         if (records.some((r) => r.id === entry.id)) continue;
@@ -74,7 +83,13 @@ export class AccountStats {
     const ps = m.players.get(playerId);
     const rec = buildQuitRecord({ me: { playerId }, room: { mode: m.mode }, match: { public: m.publicView(), result: null } },
       { live: { active: true, startedAt: ctx.statsStartedAt, sawStart: true, aliveRound: ps?.eliminatedRound || m.round }, now: ctx.statsStartedAt + m.sched.now() - m.startedAt });
-    if (rec) { rec.id = ctx.statsId; rec.reason = reason; if (ctx.matching) rec.isMatchingMatch = true; owner.profile = this.put(owner.profile, rec); }
+    if (rec) {
+      rec.id = ctx.statsId; rec.reason = reason;
+      // Public hidden-war projections deliberately omit required bonds; archive the authoritative configuration.
+      if(m.customConfig)Object.assign(rec,{customConfig:m.customConfig,customEvaluation:m.customEvaluation,customRulesVersion:m.customRulesVersion,initialPlayerCount:m.initialPlayerCount,baselineKind:m.baselineKind,roomName:m.opts.roomName});
+      if (ctx.matching) rec.isMatchingMatch = true;
+      owner.profile = this.put(owner.profile, rec);
+    }
   }
   settle(ctx, summary) {
     for (const owner of ctx.profiles) {
@@ -93,7 +108,7 @@ export class AccountStats {
     // Compact list rows are bounded; full settlement/player arrays travel through the existing replay HTTP endpoint.
     const records = []; let bytes = 0;
     for (const r of s.records.slice(offset, offset + 50)) {
-      const row = { ...compactRecord(r), compact: r.compact === true, ...(r.replay ? { replay: r.replay } : {}) };
+      const row = { ...privacyRecord(compactRecord(r)), compact: r.compact === true, ...(r.replay ? { replay: r.replay } : {}) };
       const size = Buffer.byteLength(JSON.stringify(row)); if (records.length && bytes + size > 40_000) break;
       records.push(row); bytes += size;
     }

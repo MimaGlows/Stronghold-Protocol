@@ -272,9 +272,9 @@
 }
 .bstrip.is-other .bond__core { box-shadow: 0 0 0 1px rgba(246, 163, 41, .45); }
 .bstrip__more { align-self: center; font-size: .16rem; color: var(--text-lo); padding: .04rem .08rem; border: 1px solid var(--line-2); background: rgba(8, 11, 10, .7); }
-.bslot { position: relative; display: flex; flex-direction: column; align-items: center; width: .74rem; }
+.bslot { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; width: max(.74rem, 44px); }
 .bslot .bond { --disc: .52rem; }
-.bslot .bond__name { font-size: .14rem; font-weight: 500; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+.bslot .bond__name { font-size: max(10px, .14rem); font-weight: 500; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
 .bslot__count {
   position: absolute; top: -.04rem; right: .02rem; font-size: .13rem; font-weight: 700; color: var(--text-hi);
   background: rgba(8, 11, 10, .92); border: 1px solid var(--line-2); padding: 0 .04rem; line-height: 1.35;
@@ -293,6 +293,13 @@
 
 /* ---- team panel ------------------------------------------------------------------------------------------- */
 .team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: none; }
+/* Keep every teammate reachable on short landscape screens, above the bottom controls. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .team { max-height: calc(100% - 3.3rem); overflow-y: auto; overflow-x: hidden; padding: .04rem .08rem; pointer-events: auto; touch-action: pan-y; scrollbar-width: thin; scrollbar-color: var(--mint-500) transparent; }
+  .team__row { flex-shrink: 0; }
+  .team::-webkit-scrollbar { width: 3px; }
+  .team::-webkit-scrollbar-thumb { background: var(--mint-500); }
+}
 .team__row { position: relative; display: flex; align-items: center; gap: .1rem; pointer-events: auto; }
 .team__btn {
   position: relative; padding: 0; background: none; border: 0;
@@ -524,6 +531,28 @@
 .settings-btn.btn--square .btn__label { display: contents; }
 .settings-btn.btn--square .btn__icon { width: 62%; height: 62%; } /* the gear glyph is drawn smaller in its box than the book */
 .set-list { display: flex; flex-direction: column; gap: .16rem; padding-top: .06rem; }
+/* Readable settings independent of the board's 40px layout rem; keep the shared scrolling modal. */
+.settings-modal .modal__title{font-size:22px}
+.settings-modal .modal__head,.settings-modal .modal__actions{padding:16px 20px}
+.settings-modal .modal__body{padding:16px 20px}
+.settings-modal .set-list{gap:14px}
+.settings-modal .set-row{grid-template-columns:minmax(160px,1fr) minmax(100px,180px) auto;gap:14px;min-height:34px}
+.settings-modal{--settings-label:14px;--settings-help:12px;--settings-micro:10px}
+:root[data-text="md"] .settings-modal{--settings-label:16px;--settings-help:14px;--settings-micro:12px}
+:root[data-text="lg"] .settings-modal{--settings-label:18px;--settings-help:16px;--settings-micro:14px}
+:root[data-text="xl"] .settings-modal{--settings-label:20px;--settings-help:18px;--settings-micro:16px}
+.settings-modal .set-row__label{font-size:max(var(--settings-label),calc(.18 * var(--t)))}
+.settings-modal .set-row__val{font-size:16px}
+.settings-modal :is(.set-hint,.set-keys__name,.set-keys__note,.set-keys__more>summary,.set-diag__meta){font-size:max(var(--settings-help),calc(.14 * var(--t)));line-height:1.65}
+.settings-modal .set-hint{color:var(--text-lo)}
+.settings-modal :is(.set-seg button,.set-toggle,.set-key,.set-key.is-waiting,.btn,.lang-toggle){font-size:max(12px,calc(.16 * var(--t)));min-height:32px}
+.settings-modal .set-seg button{min-width:56px;padding:6px 10px}
+.settings-modal .set-key{min-width:64px;padding:4px 8px}
+.settings-modal .set-keys__row{min-height:38px;padding:6px 8px}
+.settings-modal .micro{font-size:var(--settings-micro)}
+.settings-modal .set-lang select{font-size:max(var(--settings-help),calc(.16 * var(--t)));min-height:32px}
+.settings-modal .modal__actions .btn{font-size:14px;min-height:38px}
+@media(max-width:600px){.settings-modal .set-row{grid-template-columns:minmax(110px,1fr) minmax(80px,1fr) auto;gap:8px}.settings-modal .set-keys__list{grid-template-columns:1fr}.settings-modal .modal__body{padding:12px}}
 .set-row { display: grid; grid-template-columns: minmax(0, 3.3rem) minmax(0, 1fr) auto; align-items: center; gap: .18rem; min-height: .44rem; }
 /* The label column may shrink (the label wraps) instead of pushing its control out of the modal: at 设置 →「文字大小」
    大 / 特大 a phone's label (a Chinese name plus its Latin micro label) is wider than 3.3rem at 1rem = 40 px. */

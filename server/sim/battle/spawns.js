@@ -22,7 +22,7 @@ export class BattleSpawns {
   _queueSpawn(s, precount) {
     if (Number(s.time) === Infinity) return; // "never" — not scheduled, not counted
     // capped: a bogus count (Infinity, 1e9) would otherwise hang the constructor / exhaust memory
-    const count = Math.min(MAX_ALIVE_ENEMIES, Math.max(1, Math.floor(fin(s.count ?? 1, 1)) || 1));
+    const count = Math.min(this.flags.customQueue ? 20000 : MAX_ALIVE_ENEMIES, Math.max(1, Math.floor(fin(s.count ?? 1, 1)) || 1));
     const interval = Math.max(0, fin(s.interval, 0));
     const def = this.data.getEnemy(s.enemyKey);
     for (let i = 0; i < count; i++) {
@@ -50,6 +50,7 @@ export class BattleSpawns {
   _processSpawns() {
     const now = this.time + 1e-9;
     while (this._pending.length && this._pending[0].time <= now) {
+      if(this.flags.customQueue && this.aliveEnemies().length>=MAX_ALIVE_ENEMIES) break;
       const p = this._pending.shift();
       this._safe(() => this.spawnEnemy(p.enemyKey, { ...p, _precounted: p.precounted }), 'spawnEnemy');
     }
@@ -81,7 +82,13 @@ export class BattleSpawns {
    * sourcePlayerId, ownerPlayerId, bounty:{coins,ownerPlayerId}, countInTotal, inTotal }
    */
   spawnEnemy(enemyKey, opts = {}) {
+    if(this.flags.custom && opts.mods?.customSummon && !opts._customExpanded && opts.tag!=='boss' && opts.tag!=='part') {
+      this._customSummonFractions ||= new Map();const value=this.flags.custom.count||1,key=`${enemyKey}:${opts.ownerPlayerId||''}`;
+      const raw=value+(this._customSummonFractions.get(key)||0),count=Math.floor(raw+1e-9);this._customSummonFractions.set(key,raw-count);
+      let first=null;for(let i=0;i<count;i++){const u=this.spawnEnemy(enemyKey,{...opts,_customExpanded:true,mods:{...opts.mods,customSummon:false}});if(!first)first=u;}return first;
+    }
     if (this.enemies.length >= MAX_ALIVE_ENEMIES && this.aliveEnemies().length >= MAX_ALIVE_ENEMIES) {
+      if(this.flags.customQueue){this._queueSpawn({enemyKey,...opts,time:this.time+1/30,count:1},false);this._pending.sort((a,b)=>a.time-b.time||a.seq-b.seq);return null;}
       this._handlerError('spawnEnemy', null, new Error(`more than ${MAX_ALIVE_ENEMIES} living enemies; spawn of ${enemyKey} refused`));
       return null;
     }
@@ -112,7 +119,7 @@ export class BattleSpawns {
     const m0 = opts.mods || {};
     const m = { hpMul: mm(m0.hpMul, true), atkMul: mm(m0.atkMul), defMul: mm(m0.defMul), resMul: mm(m0.resMul), speedMul: mm(m0.speedMul) };
     const e = new Unit({
-      id: ++this._idSeq, side: 'enemy', kind: 'enemy', def, defId: def.key ?? enemyKey, name: def.name,
+      customStats:this.flags.custom, id: ++this._idSeq, side: 'enemy', kind: 'enemy', def, defId: def.key ?? enemyKey, name: def.name,
       x: start[1], y: start[0], motion: def.motion,
       base: {
         maxHp: def.maxHp * (m.hpMul ?? 1), atk: def.atk * (m.atkMul ?? 1), def: def.def * (m.defMul ?? 1), res: def.res * (m.resMul ?? 1),
@@ -120,6 +127,7 @@ export class BattleSpawns {
         tauntLevel: def.tauntLevel, massLevel: def.massLevel, hpRecoveryPerSec: def.hpRecoveryPerSec, rangeRadius: def.rangeRadius,
       },
     });
+    e.mods = opts.mods ?? null; e._dirty=true;
     e.alive = true;
     e.deployed = true;
     e.blockWeight = def.blockCnt ?? 1;

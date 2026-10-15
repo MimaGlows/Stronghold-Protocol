@@ -1,4 +1,5 @@
 // Pure official 0.2.2 record normalization and aggregate semantics, shared by server and UI.
+import { checkCustom } from './custom.js';
 import { PHASE } from './constants.js';
 
 /** Current record-envelope version (bump + add a MIGRATIONS step when the record shape changes). */
@@ -155,6 +156,9 @@ export function normalizeRecord(raw) {
     hiddenReached: bool(r.hiddenReached),
     hiddenCleared: bool(r.hiddenCleared),
     reason: str(r.reason, 32),
+    matchPrivacy:!!r.matchPrivacy||!!r.isMatchingMatch, customConfig:r.customConfig?checkCustom(r.customConfig,null,{legacy:true}):null, customEvaluation:r.customEvaluation||null, roomName:str(r.roomName),...(r.initialPlayerCount?{initialPlayerCount:int(r.initialPlayerCount,0),baselineKind:['single','multi'].includes(r.baselineKind)?r.baselineKind:null}:{}),
+    ...(r.customConfig ? {customRulesVersion:int(r.customRulesVersion,1)} : {}),
+    ...(r.customMetadataMissing ? {customMetadataMissing:true} : {}),
     modeId: str(r.modeId),
     difficulty: str(r.difficulty, 24),
     stageId: str(r.stageId),
@@ -163,11 +167,11 @@ export function normalizeRecord(raw) {
     seed: num(r.seed),
     durationMs: num(r.durationMs),
     teamLp: num(r.teamLp),
-    roomMode: r.roomMode === 'solo' || r.roomMode === 'coop' ? r.roomMode : null,
+    roomMode: r.roomMode === 'solo' || r.roomMode === 'coop' || r.roomMode === 'custom' ? r.roomMode : null,
     selfId: str(r.selfId),
     players,
+    ...(r.compact===true?{compact:true}:{}),
   };
-  if (r.compact === true) rec.compact = true;
   // an id-less (hand-made) record gets a content id, so both copies of it land on the same key
   if (!rec.id) rec.id = `c.${fnv1a(JSON.stringify(rec))}`;
   return rec;
@@ -221,7 +225,7 @@ export function migrateStats(raw) {
 
 // ---- compaction + the storage budget ---------------------------------------------------------------------------
 
-const COMPACT_FRAME = ['id', 'v', 't', 'end', 'victory', 'roundsPassed', 'lastRound', 'hiddenReached', 'hiddenCleared', 'reason', 'modeId',
+const COMPACT_FRAME = ['customRulesVersion','customMetadataMissing','matchPrivacy','customConfig','customEvaluation','roomName','initialPlayerCount','baselineKind','id', 'v', 't', 'end', 'victory', 'roundsPassed', 'lastRound', 'hiddenReached', 'hiddenCleared', 'reason', 'modeId',
   'difficulty', 'roomMode', 'durationMs', 'selfId', 'isMatchingMatch'];
 
 /**
@@ -266,10 +270,10 @@ export function fitToBudget(records, maxChars = MAX_CHARS) {
  * Derive the room shape ('solo' | 'coop') the way constants.js modeIdFor builds modeIds.
  * @param {string|null|undefined} modeId
  * @param {string|null|undefined} roomMode room.state `mode` when known
- * @returns {'solo'|'coop'|null}
+ * @returns {'solo'|'coop'|'custom'|null}
  */
 export function roomModeOf(modeId, roomMode) {
-  if (roomMode === 'solo' || roomMode === 'coop') return roomMode;
+  if (roomMode === 'solo' || roomMode === 'coop' || roomMode === 'custom') return roomMode;
   if (typeof modeId !== 'string') return null;
   if (modeId.includes('_single_')) return 'solo';
   if (modeId.includes('_multi_')) return 'coop';
@@ -301,6 +305,8 @@ export function buildRecord(res, ctx = {}) {
     hiddenReached: bool(r.hiddenReached),
     hiddenCleared: bool(r.hiddenCleared),
     reason: str(r.reason),
+    matchPrivacy:r.matchPrivacy,customConfig:r.customConfig,customEvaluation:r.customEvaluation,roomName:r.roomName,initialPlayerCount:r.initialPlayerCount,baselineKind:r.baselineKind,
+    customRulesVersion:r.customRulesVersion,customMetadataMissing:r.customMetadataMissing,
     modeId: str(r.modeId),
     difficulty: str(r.difficulty),
     stageId: str(r.stageId),
@@ -309,7 +315,7 @@ export function buildRecord(res, ctx = {}) {
     seed: num(r.seed),
     durationMs: num(r.durationMs),
     teamLp: num(r.teamLp),
-    roomMode: roomModeOf(str(r.modeId), ctx.roomMode),
+    roomMode: roomModeOf(str(r.modeId), r.roomMode||ctx.roomMode),
     selfId: myId,
     players: r.players,
   });
@@ -407,6 +413,9 @@ export function buildQuitRecord(state, ctx = {}) {
     durationMs: live.sawStart ? Math.max(0, now - live.startedAt) : null,
     teamLp: num(pub.teamLp),
     roomMode: roomModeOf(str(pub.modeId), state.room?.mode),
+    matchPrivacy:pub.matchPrivacy,isMatchingMatch:pub.matchmaking,
+    customConfig:pub.customConfig,customEvaluation:pub.customEvaluation,roomName:pub.roomName,
+    initialPlayerCount:pub.initialPlayerCount,baselineKind:pub.baselineKind,customRulesVersion:pub.customRulesVersion,
     selfId: myId,
     players: [{
       playerId: myId, seat: row.seat, name: row.name, isBot: false, left: true, alive, victory: false, roundsPassed,
@@ -432,7 +441,8 @@ export function recordToResult(rec) {
     roundsPassed: r.roundsPassed,
     hiddenReached: r.hiddenReached,
     hiddenCleared: r.hiddenCleared,
-    reason: r.reason,
+    reason: r.reason,matchPrivacy:r.matchPrivacy,customConfig:r.customConfig,customEvaluation:r.customEvaluation,roomMode:r.roomMode,roomName:r.roomName,initialPlayerCount:r.initialPlayerCount,baselineKind:r.baselineKind,
+    customRulesVersion:r.customRulesVersion,customMetadataMissing:r.customMetadataMissing,
     modeId: r.modeId,
     difficulty: r.difficulty,
     bossId: r.bossId,

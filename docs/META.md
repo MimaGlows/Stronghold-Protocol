@@ -1,6 +1,6 @@
 # META.md — match & meta engine (server/match)
 
-隔离实验模式的`Match`可接收`matchingPreferences`和`matchingProtection`，使用独立随机流影响核心盟约禁用抽取，并关闭匹配局开局重抽；具体约定见[MATCHMAKING.md](MATCHMAKING.md)。未传入时保留原规则。
+统一定制实例的`Match`可接收`matchingPreferences`和`matchingProtection`，使用独立随机流影响核心盟约禁用抽取，并关闭匹配局开局重抽；具体约定见[MATCHMAKING.md](MATCHMAKING.md)。未传入时保留原规则。
 
 Audience: **content authors** writing prep-side ("SERVER_*") effects in `server/sim/content/*.js → registerMeta(registry)`,
 the **UI owner** consuming `m.public` / `m.private` / `m.result`, and anyone driving matches in tests or tools.
@@ -105,7 +105,8 @@ published as `m.public.deadline` (= `draft.turnDeadline`; `draft.turnSeconds` it
 at once. A turn that runs out takes the strategy the player highlights in the draft screen (`g.bandFocus {bandId?}`,
 `Match.timeoutBand`) while it is allowed and no teammate holds it, else `bandDraft.timeoutBandId` 华法琳, else the first
 free strategy by sortId (`defaultBand`; a departing seat gets `defaultBand` too). One skip per player (`g.bandSkip`: the
-player moves to the end of the order; refused when nobody is left to pass to); a strategy a teammate already took is
+player moves to the end of the order; refused when nobody is left to pass to). The draft screen disables skip when
+no other unpicked player remains; finished players stay in the published order but are not skip targets. A strategy a teammate already took is
 refused (队友已选); band must list the mode type in `modeTypeList`. A single human (co-op with AI teammates only):
 untimed. Solo: free pick, no timer, no skip. Starting LP = `bands[id].totalHp`.
 
@@ -966,3 +967,13 @@ universal equipment bypass. Rockrock/Flametail's measured weighted subsets remai
 
 
 定制 v0.2.5-mimaglows.1：大厅匹配、房间补位开关、预选盟约加权禁用、分享撤销及匹配隐私规则见 [MATCHMAKING.md](MATCHMAKING.md)。历史实验交付中的70%补位保护及关闭后继续匹配规则已由本版替代。回放定期兼容性检查使用只读 Worker 和文件指纹缓存，主线程提交前复核指纹；启动等待首次索引，失败保留旧报告并重试，关闭清理 Worker。
+
+## 2026-10-15 游玩修复：回合、数值与观战
+
+额外普通回合R15–18统一使用多人R13的模板和基础敌人倍率，单人使用其最后一个普通回合；仍按1.25/1.50/1.80/2.16强化生命、攻击、攻速和数量。R15若解锁原隐藏核心仍为核心战，R19随机领袖增援使用原主BOSS基准再强化；不再因超出原数值表回退到1倍。各倍率只应用一次，评分版本3与既有历史分数不变。
+
+隐藏核心只能由主BOSS回合胜利解锁一次；R19胜利直接结算，失败直接判负。自订隐藏核心失败不得继续扩展回合。重复结算及过期阶段回调无效；原版普通模式保留主BOSS通关后隐藏核心挑战失败的原有结算规则。
+
+自订和适用匹配规则的对局禁止开局重刷，服务端发起、投票和执行均拒绝；商店刷新保持有效。隐秘战争仅隐藏盟约及战前敌军情报，不增加观战限制。点击队友头像先展开“前往查看”，再操作切换；原有双击快捷保留。服务器和客户端战斗共用阶段权限，联防提供左右及全景，服务器明确发送成员和实际左右归属。
+
+权威待扣生命变化按100毫秒采样并使用现有100毫秒公共状态节流，合并等待上限200毫秒；客户端战斗计数变化可提前发送进度，平稳期间保留原周期。状态未变化不重复广播，不提高战斗快照频率。待扣值不提前扣正式生命，按权威规则处理10点上限、落网之鱼、白鸟免扣和生命下限，结算时清除。

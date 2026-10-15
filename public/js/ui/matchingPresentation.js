@@ -7,7 +7,7 @@ import { html, Icon } from './components.js';
 import { PlayerAvatar } from './avatarPicker.js';
 import { BondGlyph, GIcon } from './gameComponents.js';
 import { t } from '../../../shared/i18n.js';
-import { MATCHING_AVATAR, DEFAULT_AVATAR } from '../../../shared/avatar.js';
+import { DEFAULT_AVATAR } from '../../../shared/avatar.js';
 import { matchingAnimate } from './matchingMotion.js';
 
 const searching = p => !!p?.attemptId && ['searching','extended'].includes(p.phase);
@@ -78,6 +78,6 @@ export function MatchingSuccessHost() {
   return html`<section ref=${root} class="matching-success" data-motion=${matchingMotion} data-attempt=${success.id} role="status" aria-label=${t('匹配成功')}>
     <div class="matching-success__sweep" aria-hidden="true"></div><div class="matching-success__mark" aria-hidden="true"><${Icon} name="check" /></div>
     <div class="matching-success__copy"><span>MATCH FOUND</span><h3>${t('匹配成功')}</h3></div>
-    <div class="matching-success__members">${members.map(m=>html`<div key=${m.playerId} class="matching-success__member"><${PlayerAvatar} avatar=${m.avatar?.kind==='custom' ? MATCHING_AVATAR : m.avatar} name=${m.name} size="md" /><span>${m.preference ? html`<${BondGlyph} bondId=${m.preference} />` : html`<${GIcon} name="refresh" />`}</span></div>`)}</div>
+    <div class="matching-success__members">${members.map(m=>html`<div key=${m.playerId} class="matching-success__member"><${PlayerAvatar} avatar=${m.avatar?.kind==='custom' ? DEFAULT_AVATAR : m.avatar} name=${m.name} size="md" /><span>${m.preference ? html`<${BondGlyph} bondId=${m.preference} />` : html`<${GIcon} name="refresh" />`}</span></div>`)}</div>
   </section>`;
 }

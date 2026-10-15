@@ -170,12 +170,20 @@ export class FieldRunner {
         this._forceField(f, 'timeout');
       }
       if (b.finished) { f.live = false; this.m.markPublic(); }
-      if (this.ticks % SNAP_EVERY === 0 || !f.live) this._emit(f);
+      const customEvery=this.m.customConfig?Math.max(SNAP_EVERY,Math.round(30*this.m.gameSpeed/(this.m.opts.customSnapshotHz||20))):SNAP_EVERY;
+      if (this.ticks % SNAP_EVERY === 0 || !f.live) this._emit(f,this.ticks%customEvery===0||!f.live);
     }
     if (this.onTick) {
       try { this.onTick(this); } catch (e) { this.m.reportError('field onTick', e); }
     }
     for (const f of this.fields) if (f.live && f.battle.finished) { f.live = false; this.m.markPublic(); this._emit(f); }
+    // Life previews are independent of the expensive battle snapshot cadence.
+    const now=this.m.sched.now();
+    if(this._lifePreviewAt==null||now-this._lifePreviewAt>=100){
+      this._lifePreviewAt=now;
+      const signature=JSON.stringify([this.m.round,this.m.phase,this.m.order.map(p=>this.m._pendingLpView(p))]);
+      if(signature!==this._lifePreviewSignature){this._lifePreviewSignature=signature;this.m.markPublic();}
+    }
   }
 
   _forceField(f, reason) {
@@ -200,14 +208,14 @@ export class FieldRunner {
 
   forceAll(reason = 'forced') { this._forceAll(reason); this._checkDone(); }
 
-  _emit(f) {
+  _emit(f,includeSnapshot=true) {
     let ev = [];
     try { ev = f.battle.drainEvents() || []; } catch (e) { this.m.reportError(`field ${f.fieldId} drainEvents`, e); }
     if (!this.emit) return;
     const watchers = this.m.watchersOf(f.fieldId);
     if (!watchers.length) return;
     let snapMsg = null;
-    try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
+    if(includeSnapshot)try { snapMsg = snapFrame(f.fieldId, f.battle.snapshot()); } catch (e) { this.m.reportError(`field ${f.fieldId} snapshot`, e); }
     const time = Number(f.battle.time);
     const gt = snapMsg ? snapMsg.gt : Number.isFinite(time) ? time : 0;
     const evMsg = ev.length ? { t: 'b.ev', fieldId: f.fieldId, gt, ev } : null;

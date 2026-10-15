@@ -145,6 +145,15 @@ export function generateDraft(gd, rng, round, { stageId = null, bondAvailable = 
   let cards = buildCards(gd, rng, family, n, sch, opts);
   if (!cards.length && family !== 'supply') { family = 'supply'; cards = buildCards(gd, rng, family, n, sch, opts); }
   if (!cards.length) return null;
+  if(gd.customPlayers>=5 && family==='bounty'){
+    const kind=sch.bountyDraft||bountyDraftKind(round);
+    const all=(gd.choices.cards?.bounty||[]).filter(c=>draftBounty(c,kind)&&gd.enemy(c.enemyKey));
+    for(const [tier,coin] of [[1,1],[2,2],[2,2]]){
+        const tierPool=all.filter(c=>c.tier===tier),candidates=tierPool.filter(c=>!cards.some(x=>x.id===c.effectId));
+        const fallback=tierPool.length?tierPool:(gd.choices.cards?.bounty||[]).filter(c=>c.tier===tier&&draftBounty(c)&&gd.enemy(c.enemyKey));
+        const source=rng.pick(candidates.length?candidates:fallback);if(source)cards.push({...bountyCard(gd,source),tier,coin});
+    }
+  }
   cards.forEach((c, i) => { c.idx = i; c.family = family; });
   const famInfo = gd.choices.families && gd.choices.families[family];
   const events = sch.events && Array.isArray(sch.events[family]) ? sch.events[family] : [];

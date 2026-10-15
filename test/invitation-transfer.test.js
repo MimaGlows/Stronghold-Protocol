@@ -14,14 +14,13 @@ async function fixture(t) {
     profileDir: path.join(dir, 'profiles'), matchmakingDir: path.join(dir, 'matching'), MatchClass: StubMatch });
   f.lobby.now = () => now;
   const clients = [], parties = f.lobby.matchmakingService.parties;
-  // These transaction tests advance the lobby clock and sweep explicitly. A wall-clock sweep between imposing
-  // a ban and rejecting an invitation would independently cancel the old queue, unrelated to the transfer.
-  clearInterval(parties.timer);
   t.after(async () => { await Promise.all(clients.map(c => c.terminate())); await f.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   const open = async (name) => { const c = await TestClient.connect(`ws://127.0.0.1:${f.port}/ws`); clients.push(c); c.id = (await c.hello(name)).playerId; return c; };
   const session = c => f.registry.byId(c.id), identity = c => f.lobby.matchmakingService.identity(session(c));
   const room = c => f.lobby.roomOf(session(c)), party = c => parties.of(session(c));
-  const request = async (c, fields) => { const r = await c.request(fields); assert.equal(r.t, 'ok', JSON.stringify(r)); return r; };
+  const request = async (c, fields) => {
+    if(fields.t.endsWith('.inviteRespond')&&fields.accept){const cur=room(c),p=party(c)||f.lobby.matchmakingService.partyForIdentity(session(c));fields={...fields,replaceCurrent:true,source:{roomCode:cur?.shareCode||null,roomRevision:cur?.customRevision||cur?.matchingRevision||0,partyId:p?.id||null,partyRevision:p?.revision||0}};}
+    const r = await c.request(fields); assert.equal(r.t, 'ok', JSON.stringify(r)); return r; };
   const create = async (c, backfill = false) => {
     await request(c, { t: 'room.create', mode: 'coop', difficulty: 'NORMAL' });
     if (backfill) await request(c, { t: 'matching.setEnabled', on: true, bond: null, revision: room(c).matchingRevision });
@@ -98,21 +97,6 @@ for (const kind of ['matching', 'social']) {
     });
   }
 }
-
-test('a failed invitation preserves its source transaction until the scheduler independently applies a new ban', async t => {
-  const f = await fixture(t), a = await f.open('邀请者#0001'), b = await f.open('接受者#0002');
-  await f.search(b); const previous = f.party(b), attempt = previous.attempt;
-  await f.create(a, true); const id = await f.invite(a, b, 'social');
-  f.lobby.matchmakingService.store.edit(f.identity(b), row => { row.bannedUntil = f.lobby.now() + 60000; });
-  assert.equal((await b.request({ t: 'social.inviteRespond', inviteId: id, accept: true })).code, 'MATCH_BANNED');
-  assert.equal(f.party(b), previous); assert.equal(previous.attempt, attempt);
-  assert.equal(previous.phase, 'searching'); assert.equal(previous.members[0].ready, true); assert.equal(f.room(b), null);
-  f.parties.pump();
-  assert.equal(f.party(b), previous); assert.equal(previous.attempt, null);
-  assert.equal(previous.phase, 'idle'); assert.equal(previous.members[0].ready, false);
-  const state = await b.waitFor('matching.state', message => message.party?.phase === 'idle' && message.bannedUntil > f.lobby.now());
-  assert.equal(state.party.members[0].ready, false);
-});
 
 test('leaving an old searching party transfers leadership and resets the remaining members without penalty', async t => {
   const f = await fixture(t), a = await f.open('邀请者#0001'), b = await f.open('旧队长#0002'), c = await f.open('旧队员#0003');

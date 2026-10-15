@@ -722,7 +722,7 @@ describe('keyboard & settings', () => {
   test('sanitizeSettings', () => {
     assert.deepEqual(sanitizeSettings(null), { ...DEFAULT_SETTINGS });
     assert.deepEqual(sanitizeSettings({ bgm: 3, sfx: -1, voice: 2, muted: 'yes', damageNumbers: false, quality: 'ultra' }),
-      { voiceLanguage: 'jp', voiceOverrides: {}, socialPrivacy: { ...DEFAULT_SETTINGS.socialPrivacy }, bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, officialDamageNumbers: false, quality: 'high', textSize: 'sm', matchingMotion: 'full', keys: { ...DEFAULT_SETTINGS.keys } },
+      { voiceLanguage: 'jp', voiceOverrides: {}, socialPrivacy: { ...DEFAULT_SETTINGS.socialPrivacy }, bgm: 1, sfx: 0, voice: 1, muted: false, damageNumbers: false, officialDamageNumbers: false, ammoCount: false, quality: 'high', textSize: 'sm', matchingMotion: 'full', keys: { ...DEFAULT_SETTINGS.keys } },
       'a saved profile without `keys` (before 0.2.0) gets the default key map (test/ui/feedback5-hotkeys.test.js)');
     assert.equal(sanitizeSettings({ bgm: 0.5 }).voice, DEFAULT_SETTINGS.voice, 'a saved profile without `voice` gets the default');
     // Custom accounts retain their Japanese default and per-operator overrides.

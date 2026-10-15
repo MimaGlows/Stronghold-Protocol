@@ -30,6 +30,7 @@ export class Unit {
     for (const k of ['def', 'player', 'ownerUnit', 'kit', 'profile', 'skill', 'route', 'bossPool', 'blockedBy', 'blocking', 'carry', 'mem', 'trait']) {
       Object.defineProperty(this, k, { value: null, writable: true, enumerable: false, configurable: true });
     }
+    this.customStats = init.customStats || null;
     this.id = init.id;
     this.side = init.side;            // 'ally' | 'enemy'
     this.kind = init.kind;            // 'op' | 'token' | 'enemy' | 'device'
@@ -184,11 +185,21 @@ export class Unit {
       shield,
       flags: flags || EMPTY,
     };
+    if (this.customStats && this.kind !== 'token' && this.kind !== 'device') {
+      const c=this.customStats, enemy=this.side==='enemy';
+      const h=enemy?c.enemyHp:c.allyHp, a=enemy?c.enemyAtk:c.allyAtk, speed=enemy?c.enemyAspd:c.allyAspd;
+      const boost=enemy?(this.mods?.whitebirdBoost||1):1;
+      s.maxHp*=h*boost; s.atk*=a*boost; s.interval/=speed*boost;
+      if(h>2){s.def*=1+.5*(h-2);s.res=Math.max(s.res,Math.min(95,s.res+20*(h-2)));}
+      const ignore=.4*Math.max(0,Math.min(1,(a-2)/2));
+      s.defIgnorePct=1-(1-s.defIgnorePct)*(1-ignore);s.resIgnorePct=1-(1-s.resIgnorePct)*(1-ignore);
+      if(!enemy && this.kind==='op')s.redeployMul*=c.redeploy;
+    }
     s.flags.stun = !!(flags.stun || flags.freeze || flags.sleep || flags.levitate);
     this._s = s;
     this._dirty = false;
-    if (this.alive && prevMax > 0 && Math.abs(prevMax - maxHp) > 1e-9) {
-      this.hp = clamp(fin(this.hp * (maxHp / prevMax), maxHp), 0, maxHp);
+    if (this.alive && prevMax > 0 && Math.abs(prevMax - s.maxHp) > 1e-9) {
+      this.hp = clamp(fin(this.hp * (s.maxHp / prevMax), maxHp), 0, maxHp);
     }
   }
 

@@ -48,6 +48,9 @@ test('COMBAT: one battle per alive player with the board as input; watchers get 
   assert.ok(h.allTo('p_0', 'b.ev').length > 0);
   assert.ok(h.allTo('p_0', 'b.snap').every((s) => s.fieldId === 'n:p_0'));
   // switch to the teammate's field
+  assert.equal(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }).error,'WRONG_PHASE');
+  fa.forceEnd('forced');
+  m.fields.find(f=>f.fieldId==='n:p_0').live=false;
   assert.deepEqual(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
   assert.equal(h.lastTo('p_0', 'm.field').fieldId, 'n:p_1');
   h.sched.advance(200);
@@ -59,7 +62,7 @@ test('COMBAT: one battle per alive player with the board as input; watchers get 
   const live = h.lastBc('m.public');
   assert.equal(live.fields.find((f) => f.fieldId === 'n:p_1').live, false);
   assert.equal(live.players.find((p) => p.playerId === 'p_1').status, 'done');
-  assert.equal(live.players.find((p) => p.playerId === 'p_0').status, 'combat');
+  assert.equal(live.players.find((p) => p.playerId === 'p_0').status, 'done');
   h.run(() => m.phase === PHASE.SETTLE);
   m.dispose();
 });

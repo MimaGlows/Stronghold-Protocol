@@ -63,7 +63,7 @@ export class MatchInfra {
    * with a single human (loneHuman: a 同盟 room started alone or with AI teammates only — user playtest #4 item 3):
    * the timers only ever made humans wait on each other; AI seats act at once.
    */
-  get soloUntimed() { return this.isSolo || this.loneHuman; }
+  get soloUntimed() { return !this.customConfig && (this.isSolo || this.loneHuman); }
 
   nextUid() { return ++this.uidSeq; }
 

@@ -11,6 +11,7 @@
 .result__main { position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; grid-template-columns: 5.6rem 1fr; gap: .5rem; padding: .36rem .5rem .3rem .6rem; }
 .result__hero { display: flex; flex-direction: column; align-items: flex-start; gap: .16rem; padding-top: .3rem; min-height: 0; }
 .result__summary { display: flex; flex-direction: column; align-items: flex-start; gap: .16rem; min-height: 0; width: 100%; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.result__summary > * { flex-shrink: 0; }
 .result__logoimg { height: 1.1rem; width: auto; opacity: .92; }
 .result__headline { font-size: calc(.96 * var(--t)); font-weight: 900; letter-spacing: .12em; line-height: 1.05; color: var(--mint-400); text-shadow: 0 0 .4rem rgba(23, 249, 183, .45); animation: head-in 600ms var(--ease-out); }
 .result.is-lose .result__headline { color: var(--red-premium); text-shadow: 0 0 .4rem rgba(255, 60, 60, .4); }
@@ -28,7 +29,7 @@
 .medal__check { position: absolute; right: .04rem; top: .64rem; width: .32rem; height: .32rem; display: grid; place-items: center; background: var(--text-dim); color: #fff; border-radius: 50%; }
 .medal.is-done .medal__check { background: var(--gold); color: #1d1400; }
 .medal__check .icon { width: .2rem; height: .2rem; }
-.medal__label { font-size: calc(.14 * var(--t)); color: var(--text-lo); }
+.medal__label { font-size: calc(.14 * var(--t)); color: var(--text-lo); white-space: nowrap; }
 .result__time { font-size: calc(.16 * var(--t)); }
 .result__time b { color: var(--text-hi); }
 
@@ -75,5 +76,27 @@
 .rstat { display: flex; align-items: baseline; justify-content: space-between; gap: .06rem; padding: .05rem .1rem; background: #0e1210; box-shadow: 0 0 0 1px var(--line); font-size: calc(.13 * var(--t)); color: var(--text-lo); white-space: nowrap; min-width: 0; }
 .rstat b { font-size: calc(.18 * var(--t)); color: #fff; }
 .rstat.is-best b { color: var(--gold); }
-.result__foot { flex: 0 0 auto; margin-top: auto; padding-top: .2rem; display: flex; }
-.result__foot .btn { min-width: 3.4rem; }
+.result__foot { flex: 0 0 auto; margin-top: auto; padding-top: .2rem; display: flex; flex-wrap: wrap; gap: .08rem; width: 100%; }
+.result__foot .btn { flex: 1 1 100%; min-width: 0; min-height: 34px; font-size: max(12px, calc(.18 * var(--t))); }
+@media (max-height: 500px) {
+  .result__hero { padding-top: .1rem; gap: .08rem; }
+  .result__summary { gap: .08rem; }
+  .result__logoimg { height: .6rem; }
+}
+
+/* Keep settlement readable on short landscape screens; player cards scroll rather than shrinking text. */
+.result__sub, .result__rlabel { font-size: max(12px, calc(.2 * var(--t))); }
+.medal__label, .result__time { font-size: max(12px, calc(.16 * var(--t))); }
+.rcard__name { font-size: max(16px, calc(.22 * var(--t))); overflow-wrap: anywhere; }
+.rcard__ai, .rcard__you { font-size: max(10px, calc(.11 * var(--t))); }
+.rcard__band, .rcard__gain, .rcard__gain b, .rcard__noinfo, .rbond { font-size: max(11px, calc(.15 * var(--t))); }
+.rcard__title b { font-size: max(14px, calc(.19 * var(--t))); }
+.rcard__title .micro, .rcard__round .micro { font-size: max(10px, calc(.13 * var(--t))); }
+.rstat { font-size: max(12px, calc(.13 * var(--t))); flex-wrap: wrap; }
+.rstat b { font-size: max(14px, calc(.18 * var(--t))); }
+@media (max-width: 900px) {
+  .rcard__head { grid-template-columns: auto minmax(0, 1fr) auto; gap: .14rem; }
+  .rcard__mid { grid-column: 2 / -1; }
+  .rcard__title { grid-column: 2; }
+  .rcard__round { grid-column: 3; grid-row: 1; }
+}

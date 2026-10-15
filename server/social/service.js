@@ -1,4 +1,5 @@
 import { compactRecord } from '../../shared/stats.js';
+import { hasMatchPrivacy } from '../../shared/matchPrivacy.js';
 import { N_ } from '../../shared/i18n.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { sendSession } from '../net.js';
@@ -23,7 +24,7 @@ export class SocialService {
       const matches=[];
       for(const r of p.statistics?.records||[]) {
         const a=this.lobby.accountStats.rawArchive(r.id);
-        if(!a?.result || a.isMatchingMatch || ['abandoned','interrupted'].includes(a.result.reason)) continue;
+        if(!a?.result || hasMatchPrivacy(a) || hasMatchPrivacy(r) || ['abandoned','interrupted'].includes(a.result.reason)) continue;
         if(!a.participants?.some(x=>participantIdentity(x)===participantIdentity(p))) continue;
         matches.push({id:r.id,endedAt:a.endedAt||r.t,participants:a.participants.filter(x=>!x.isBot&&participantIdentity(x)).map(({name,doctorCode})=>({name,doctorCode}))});
       }
@@ -33,7 +34,7 @@ export class SocialService {
     }
   }
   remember(ctx,summary) {
-    if(ctx.matching || ['abandoned','interrupted'].includes(summary.reason)) return;
+    if(hasMatchPrivacy(ctx) || hasMatchPrivacy(summary) || hasMatchPrivacy(ctx.match) || ['abandoned','interrupted'].includes(summary.reason)) return;
     const participants=ctx.profiles.map(o=>({name:o.profile.name,doctorCode:o.profile.code}));
     for(const o of ctx.profiles) {
       const p=this.lobby.profiles.read(o.profile.name,o.profile.code); if(!p)continue;
@@ -100,8 +101,8 @@ export class SocialService {
     const row = { identity, name: profile.name, hideCode: this.lobby.matchmakingService.rules(room), code: profile.code, status: live?.status || 'offline', canViewProfile: canViewProfile(viewer, profile), avatarRevision: createHash('sha256').update(JSON.stringify(avatar)).digest('hex').slice(0, 16), ...extra };
     if (room) {
       row.mode = room.mode; row.difficulty = room.difficulty;
-      row.canJoin = room.mode === 'coop' && !room.match && privacy.allowFriendJoin;
-      row.canSpectate = !!room.match && privacy.allowFriendSpectate;
+      row.canJoin = ['coop','custom'].includes(room.mode) && !room.match && privacy.allowFriendJoin;
+      row.canSpectate = (!!room.match || room.mode==='custom') && privacy.allowFriendSpectate;
       row.players = room.seats.filter(Boolean).length; row.spectators = room.spectators.length;
       const pub = room.socialPublic || room.match?.publicView?.();
       if (room.match && pub) {
@@ -213,10 +214,10 @@ export class SocialService {
         if (this.playingElsewhere(session, live.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
         if (msg.t === 'social.join') {
           if (live.room.match) return fail(N_('对方已开始模拟，可以观战'), ERR.ROOM_STARTED);
-          return this.capacityResult(this.lobby.joinRoom(session, live.room, { leaveParty: true }), false);
+          return this.capacityResult(this.lobby.joinRoom(session, live.room, { replaceCurrent: msg.replaceCurrent, source: msg.source }), false);
         }
-        if (!live.room.match) return fail(N_('对方的模拟已结束'));
-        return this.capacityResult(this.lobby.spectateRoom(session, live.room), true);
+        if (!live.room.match && live.room.mode !== 'custom') return fail(N_('对方的模拟已结束'));
+        return this.capacityResult(this.lobby.spectateRoom(session, live.room, { replaceCurrent:msg.replaceCurrent, source:msg.source }), true);
       }
       case 'social.invite': return this.invite(session, identity);
       case 'social.inviteRespond': return this.respond(session, msg);
@@ -228,7 +229,7 @@ export class SocialService {
   }
   invite(session, to) {
     const room = this.lobby.roomOf(session), from = keyOf(session), now = this.lobby.now();
-    if (!room || room.mode !== 'coop' || room.match || !room.seatOf(session.playerId)) return fail(N_('只能在同盟等待房间邀请玩家'));
+    if (!room || !['coop','custom'].includes(room.mode) || room.match || !room.seatOf(session.playerId)) return fail(N_('只能在同盟等待房间邀请玩家'));
     if (room.matchQueue) return { error: ERR.MATCH_LOCKED };
     if (to === from || !this.related(session, to)) return fail(N_('只能邀请好友或近期玩家'));
     if (this.sessions(to).some((s) => s.roomCode === room.code)) return fail(N_('该玩家已在当前同盟中'), ERR.ALREADY);
@@ -242,7 +243,7 @@ export class SocialService {
     return ok;
   }
   emitInvite(session, invite) {
-    this.emit(session, 'social.invite', { inviteId: invite.id, from: invite.from, difficulty: invite.room.difficulty, expiresAt: invite.expiresAt, serverNow: this.lobby.now() });
+    this.emit(session, 'social.invite', { inviteId: invite.id, from: invite.from, difficulty: invite.room.difficulty, mode:invite.room.mode,roomName:invite.room.customName, expiresAt: invite.expiresAt, serverNow: this.lobby.now() });
   }
   valid(invite) {
     const room = invite.room, inviter = this.lobby.registry.byId(invite.inviter);
@@ -252,14 +253,14 @@ export class SocialService {
     this.invites.delete(invite.id);
     for (const session of this.sessions(invite.to)) this.emit(session, 'social.inviteEnded', { inviteId: invite.id, reason });
   }
-  respond(session, { inviteId, accept }) {
+  respond(session, { inviteId, accept,replaceCurrent,source }) {
     const invite = this.invites.get(inviteId);
     if (!invite || invite.to !== keyOf(session)) return fail(N_('邀请已失效'));
     if (!this.valid(invite)) { this.end(invite, 'expired'); return fail(N_('邀请已失效')); }
     if (!accept) { this.end(invite, 'declined'); return ok; }
     const current = this.lobby.roomOf(session);
     if (current?.match || this.playingElsewhere(session, invite.room)) return fail(N_('请先退出当前对局'), ERR.ROOM_STARTED);
-    const result = this.capacityResult(this.lobby.joinRoom(session, invite.room, { leaveParty: true }), false);
+    const result = this.capacityResult(this.lobby.joinRoom(session, invite.room, { replaceCurrent, source, acceptedInviteId:inviteId }), false);
     if (result.error) return result;
     this.end(invite, 'accepted'); return ok;
   }

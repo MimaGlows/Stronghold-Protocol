@@ -66,6 +66,7 @@ export const ICONS = {
   hourglass: { d: 'M6 2h12v2h-1v3.5L13.5 12l3.5 4.5V20h1v2H6v-2h1v-3.5l3.5-4.5L7 7.5V4H6zm3 2v2.8l3 3.9 3-3.9V4zm0 16h6v-2.8l-3-3.9-3 3.9z', eo: true },
   dots: { d: 'M5 10.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4zm7 0a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4zm7 0a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4z' },
   key: { d: 'M14.5 3a6.5 6.5 0 1 1-2.6 12.5l-1.1 1.1H9v2H7v2H3v-3.6l5.5-5.5A6.5 6.5 0 0 1 14.5 3zm1.5 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', eo: true },
+  lock: { d:'M7 10V7a5 5 0 0 1 10 0v3h2v12H5V10zm2 0h6V7a3 3 0 0 0-6 0zm2 4v5h2v-5z',eo:true },
   search: { d: 'M10 3a7 7 0 0 1 5.6 11.2l5.6 5.6-1.4 1.4-5.6-5.6A7 7 0 1 1 10 3zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10z', eo: true },
   info: { d: 'M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm-1 8v7h2v-7zm0-3v2h2V7z', eo: true },
   warn: { d: 'M12 2 1 21h22zm-1 7v6h2V9zm0 7.5v2h2v-2z', eo: true },
@@ -522,8 +523,8 @@ export function DialogHost() {
   const onKey = (e) => {
     if (e.key === 'Enter' && e.target?.tagName !== 'BUTTON') { e.preventDefault(); closeDialog(d.id, true); }
   };
-  return html`<div onKeyDown=${onKey}>
-    <${Modal} key=${d.id} open=${true} class=${d.opts.class} title=${title} micro=${micro} tone=${tone || (danger ? 'red' : 'mint')}
+  return html`<div class="dialog-host" onKeyDown=${onKey}>
+    <${Modal} key=${d.id} open=${true} title=${title} micro=${micro} tone=${tone || (danger ? 'red' : 'mint')} class=${d.opts.class||''}
       onClose=${() => closeDialog(d.id, isConfirm ? false : true)}
       actions=${html`
         ${isConfirm ? html`<${Button} variant="secondary" onClick=${() => closeDialog(d.id, false)}>${cancelText}<//>` : null}
@@ -866,12 +867,12 @@ export function DifficultyIcon({ difficulty, class: cls }) {
  * Difficulty tag: coloured glyph + name (标准/险境/绝境/终极模拟).
  * @param {{ difficulty: string, size?: 'sm'|'md'|'lg', class?: string, code?: string }} props
  */
-export function DifficultyTag({ difficulty, size = 'md', class: cls, code }) {
+export function DifficultyTag({ difficulty, size = 'md', class: cls, code, score }) {
   const name = DIFFICULTY_NAMES[difficulty] ? t(DIFFICULTY_NAMES[difficulty]) : difficulty || '—';
   const color = DIFFICULTY_COLORS[difficulty] || 'var(--text-lo)';
   return html`<span class=${cx('dtag', `dtag--${size}`, cls)} style=${`--d-color:${color}`}>
     <${DifficultyIcon} difficulty=${difficulty} class="dtag__icon" />
-    <span class="dtag__name">${name}</span>
+      <span class="dtag__name">${name}${Number.isFinite(score)?`（${score}）`:''}</span>
     ${code ? html`<span class="dtag__code">${code}</span>` : null}
   </span>`;
 }

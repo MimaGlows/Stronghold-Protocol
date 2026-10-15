@@ -29,6 +29,8 @@
 
 // Polyfills first (older Safari / Firefox ESR): every module evaluated after this one sees them.
 import './ui/compat.js';
+import { instanceProfile } from './instance.js';
+import { alertDialog } from './ui/components.js';
 import { installCommunications } from './ui/communications.js';
 import { installSocial, FriendsDrawer, SocialInviteHost, requestInvitePermissionOnGesture } from './ui/social.js';
 import { doctorProfileKey } from '../../shared/doctor.js';
@@ -66,7 +68,7 @@ import { HistoryHost } from './replay/host.js';
 import { rememberMatch, restoreHistory, beginHistoryProfile, historyStore, parseSharedReplay, openSharedReplay } from './replay/history.js';
 import { StatsHost } from './screens/stats.js';
 import { accountStatsStore, beginStatsProfile, refreshStats } from './ui/accountStats.js';
-import { recordError } from './diag.js';
+import { recordError, installTrafficMeter } from './diag.js';
 
 const RESTORE_GRACE_MS = 1500;
 const JOIN_DELAY_MS = 350;
@@ -220,7 +222,7 @@ function wireNet() {
   net.on('profileChanging', () => { notifyMatchingAvatar(null,false,null); store.set({ matching: { identity: null, blocks: [], bannedUntil: 0, preference: null, party: null, restricted: false, offset: 0 } }); });
   net.on('matching.state', (msg) => {
     if (msg.identity !== doctorProfileKey(net.name)) return;
-    store.set({ matching: { identity: msg.identity, blocks: msg.blocks || [], bannedUntil: msg.bannedUntil || 0, preference: msg.preference || null, party: msg.party || null, restricted: !!msg.restricted, offset: msg.serverNow - Date.now() } });
+    store.set({ matching: { identity: msg.identity, selfReference:msg.selfReference||null, blocks: msg.blocks || [], blockLabels:msg.blockLabels||{}, bannedUntil: msg.bannedUntil || 0, preference: msg.preference || null, party: msg.party || null, restricted: !!msg.restricted, offset: msg.serverNow - Date.now() } });
     notifyMatchingAvatar(msg.identity,!!msg.restricted,avatarStore.get().avatar);
   });
   net.on('status', (snap) => {
@@ -266,6 +268,7 @@ function wireNet() {
   net.on('m.result', (msg) => {
     rememberMatch(msg, store.get().me.playerId);
     const res = payload(msg);
+    if(msg.reason==='duration_limit')void alertDialog({title:t('达到对局时限'),text:t('本局已达到100分钟时限，服务器已结束对局。已完成回合和已获奖励保留，不计放弃处罚。')});
     store.patch('match', { result: res });
     void refreshStats();
   });
@@ -330,19 +333,20 @@ function App() {
   const Screen = SCREENS[route] || LobbyScreen;
   return html`<div class="app-root">
     <div class="app-bg" aria-hidden="true"></div>
+    ${instanceProfile.experimental ? html`<span class="experimental-badge">${t('实验匹配版')}</span>` : null}
     ${error ? html`<${ScreenCrashed} error=${error} reset=${resetError} />` : html`<${Screen} key=${route} />`}
     <${ConnectionBanner} />
     <${ToastHost} />
-    <${UiHosts} />
     <${GuideHost} />
     <${LoadoutHost} />
     <${AvatarHost} />
     <${HistoryHost} />
-    <${FriendsDrawer} visible=${route === 'lobby' || (route === 'room' && store.get().room?.mode === 'coop')} />
+    <${FriendsDrawer} visible=${route === 'lobby' || (route === 'room' && ['coop','custom'].includes(store.get().room?.mode))} />
     <${SocialInviteHost} />
     <${MatchingSuccessHost} />
     <${ProfileTransferHost} />
     <${StatsHost} />
+    <${UiHosts} />
   </div>`;
 }
 
@@ -380,6 +384,8 @@ function installGlobalErrorHandlers() {
 
 async function boot() {
   installGlobalErrorHandlers();
+  // what this page downloads, by category, for the 问题反馈 report's traffic line (diag.js; nothing is sent anywhere)
+  installTrafficMeter();
   // touch / hover / fullscreen classes, zoom-gesture blocking, rotation re-layout (ui/device.js, css/devices.css)
   installDeviceSupport();
   // A page restored from the back/forward cache has a dead socket and a stale token choice: start over.

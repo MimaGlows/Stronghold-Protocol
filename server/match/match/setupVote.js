@@ -10,7 +10,7 @@ import { OK, fail } from './common.js';
 
 export class MatchSetupVote {
   requestSetupReroll(playerId, revision) {
-    if (this.matchingPreferences) return fail(ERR.MATCH_LOCKED);
+    if (this.customConfig || this.matchPrivacy || this.matchingPreferences || this.mode==='matching') return fail(ERR.MATCH_LOCKED);
     if (this.disposed || this.ended || this.phase !== PHASE.INFO_CHECK) return fail(ERR.WRONG_PHASE);
     const ps = this.players.get(playerId);
     if (!ps || ps.isBot || ps.left || !ps.connected) return fail(ERR.NOT_IN_ROOM);
@@ -38,6 +38,7 @@ export class MatchSetupVote {
   }
 
   voteSetupReroll(ps, voteId, agree) {
+    if (this.customConfig || this.matchPrivacy || this.matchingPreferences || this.mode==='matching') return fail(ERR.MATCH_LOCKED);
     if (this.phase !== PHASE.INFO_CHECK || !this.setupVote) return fail(ERR.WRONG_PHASE);
     const vote = this.setupVote;
     if (vote.id !== voteId) return fail(ERR.BAD_TARGET, 'setup vote changed');
@@ -78,12 +79,13 @@ export class MatchSetupVote {
   }
 
   completeSetupReroll() {
+    if (this.customConfig || this.matchPrivacy || this.matchingPreferences || this.mode==='matching') return fail(ERR.MATCH_LOCKED);
     let prepared;
     try {
       const rng = createRng(deriveSeed(this.seed, `reroll-setup:${this.setupRevision + 1}`));
       const setup = setupMatchWaves(this.gd, rng);
       const stage = setup.stageId ? this.gd.stage(setup.stageId) : null;
-      const bans = drawDisabledBonds(this.gd, rng);
+      const bans = drawDisabledBonds(this.gd, rng, this.customConfig?.requiredBonds || []);
       const pool = new SharedPool(this.gd, { banned: bans.banned });
       if (!pool.entries.size) throw new Error('rerolled chess pool is empty');
       const off = new Set([...bans.drawn, ...bans.staticOff]);

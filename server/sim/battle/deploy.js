@@ -133,7 +133,7 @@ export class BattleDeploy {
       if (unit.kind === 'op' && !permanent) {
         if (reason === 'killed') { const pp = this._pp(unit.ownerId); if (pp) pp.deaths++; }
         const mul = unit.persist.redeployMul * unit.s.redeployMul;
-        unit.respawnAt = this.time + Math.max(0, unit.base.respawnTime * mul);
+        unit.respawnAt = this.time + Math.max(this.flags.custom ? 1/30 : 0, unit.base.respawnTime * mul);
         if (this.isDown(unit)) this._layBody(unit); // before `die` / `death`: the body's tile is final for them
       } else {
         unit.removed = true;
