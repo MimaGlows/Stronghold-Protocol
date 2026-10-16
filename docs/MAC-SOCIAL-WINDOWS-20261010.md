@@ -18,7 +18,7 @@
 
 ## 实际验证与归档
 
-本次 Windows 检查、截图、补丁、校验清单、部署和回滚记录位于实例旁 `.updates/mac-social-remerge-20261010/`。`docs/SOCIAL.md` 和 `docs/COMMUNICATIONS.md` 的 Mac 历史验收不是 Windows 本次验收结果。
+本次 Windows 检查、截图、补丁、校验清单、部署和回滚记录位于维护者本地的验收记录（未随仓库发布）。`docs/SOCIAL.md` 和 `docs/COMMUNICATIONS.md` 的 Mac 历史验收不是 Windows 本次验收结果。
 
 完整 Node 测试：5827 项，5798 通过、2 失败、27 跳过。失败分别为 Mac 的 `scripts/test-server.mjs` 在 Windows 被 Node 自动发现后明确拒绝运行，以及既有重型 BOSS 性能阈值（0.828ms/tick，目标 0.5ms）。正式启动使用已有 Windows 入口，不调用该 Mac 辅助脚本；本次没有修改模拟引擎。lint 为 0 错误、136 警告；typecheck 通过；四语言 1353 条提示全覆盖。Golden 的 283 场景全部匹配。导入检查保留既有 Node 数据加载器的三条内置导入，没有新增边界违反。
 

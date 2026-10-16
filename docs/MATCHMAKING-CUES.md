@@ -17,7 +17,7 @@
 
 浏览器使用独立临时服务和账号，实际记录动画时间、变换和透明度中间值，并通过真正Web Audio解码三种内置音频。覆盖计时／重连阶段去重、取消再开始、四人成功、补位成功、头像限制、黑名单、减少模式静态成功及普通房主开局。声音沿用现有音频管理器测试，不把无音轨WebM当作听觉证据。
 
-取证目录为test/e2e/out/matchmaking-v6/，19-success-motion.webm为正常速度成功录屏，20-friends-open.png为展开中间态，21-queue-exit.png为离队下滑中间态，22-success-mobile.png为手机减少模式静态成功。保留MATCH FOUND英文眉标来延续游戏状态语法，未删除代号或盟约等准备信息。
+取证目录为test/e2e/out/matchmaking-v6/（本地测试产物，未随仓库发布），19-success-motion.webm为正常速度成功录屏，20-friends-open.png为展开中间态，21-queue-exit.png为离队下滑中间态，22-success-mobile.png为手机减少模式静态成功。保留MATCH FOUND英文眉标来延续游戏状态语法，未删除代号或盟约等准备信息。
 
 包含取消搜索下滑的最终实现，主Agent连续三轮多账号验收全部通过：51.34秒、52.62秒、53.43秒，均0页面异常。在本机实际prefers-reduced-motion=true的环境中测量好友展开／收回矩阵变化、成功中间透明度与变换，以及取消／离队向下位移；等待可观察变化，避免将初始currentTime=0的rAF帧误认为动画停止。
 
@@ -25,4 +25,4 @@
 
 最终CI lint、imports、typecheck通过，保持已有139条lint警告、0错误；相关回归46项及文档一致性／路径31项通过，严格多语言检查通过。日志为.development/cues-browser-final-1.log至cues-browser-final-3.log、cues-regression-final.log、cues-ci-final.log、cues-i18n.log和cues-docs.log。未改战斗引擎及Golden基准，本轮执行界面相关验证。
 
-已通过专用入口重启至[实验匹配版](http://127.0.0.1:3002/)，PID44872，构建718a2e23f677，healthz正常、首页HTTP200并含实验标识。3000仍为原PID23812，3001仍为原PID27168；未修改、停止或重启原实例，也未改变其文件、数据、配置和隧道。实验账号目录、Cookie及浏览器存储继续隔离。副本根目录启动实验匹配.cmd、实验匹配状态.cmd、停止实验匹配.cmd继续只管理实验进程。刷新页面即可加载。
+已通过专用入口重启至实验匹配版（维护者本机实验实例），构建718a2e23f677，healthz正常、首页HTTP200并含实验标识。3000、3001 保持原进程；未修改、停止或重启原实例，也未改变其文件、数据、配置和隧道。实验账号目录、Cookie及浏览器存储继续隔离。副本根目录启动实验匹配.cmd、实验匹配状态.cmd、停止实验匹配.cmd继续只管理实验进程。刷新页面即可加载。

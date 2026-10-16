@@ -2,9 +2,9 @@
 
 感谢 [sganggs/Stronghold-Protocol](https://github.com/sganggs/Stronghold-Protocol) 原作者及社区贡献者！此个人优化版本由 MimaGlows 基于原项目维护，借助 GPT-6.1-Sol 补充了一些方便日常游玩与联机的功能。目前基于上游 **v0.2.6**，具体介绍也可查看[小黑盒发布文章](https://www.xiaoheihe.cn/app/bbs/link/193523180)。
 
-**定制版源码**：[master](https://github.com/MimaGlows/Stronghold-Protocol/tree/master) · **已公开旧版Windows便携包（v0.2.5）**：[Release 下载](https://github.com/MimaGlows/Stronghold-Protocol/releases/tag/v0.2.5-mimaglows.1)
+**定制版源码**：[master](https://github.com/MimaGlows/Stronghold-Protocol/tree/master) · **Windows 整合包**：[最新 Release](https://github.com/MimaGlows/Stronghold-Protocol/releases/latest)（当前为 `v0.2.6-mimaglows-unified.2`）· **定制版更新记录**：[docs/CUSTOM-CHANGELOG.md](docs/CUSTOM-CHANGELOG.md)
 
-本机三个实例已统一至0.2.6；本轮修正规则及兼容约定见[统一审计修复](docs/REPAIR-20261015.md)。
+当前定制版基于上游 v0.2.6；本版修正的规则及兼容约定见[统一审计修复](docs/REPAIR-20261015.md)，全部定制文档见下方[定制版文档](#定制版文档)。
 
 ## 这个版本增加了什么？
 
@@ -21,7 +21,8 @@
 
 - 测试地址：[ten.mimaglows.com:44580](https://ten.mimaglows.com:44580/)（测试服，高并行的情况下网络承压会比较卡顿，不保证持续可用）。
 - 反馈交流：`588210551`。
-- 自行部署：克隆本仓库的 `master` 分支；Windows 安装 Node.js 22 或更高版本后，双击根目录 `start-custom-windows.cmd`。完整说明见[定制版部署与验证记录](docs/GITHUB-WINDOWS-CUSTOM.md)。
+- Windows 整合包：在[最新 Release](https://github.com/MimaGlows/Stronghold-Protocol/releases/latest) 下载 `Stronghold-Protocol-Windows-<版本>.zip`（内含 Windows Node.js 24、生产依赖、全部素材与中日配音，可用 `SHA256SUMS.txt` 校验），完整解压后双击 `启动游戏.cmd`，访问 <http://127.0.0.1:3000/>；换端口用 `启动游戏.cmd --port 3001`。整合包不含任何玩家数据，从旧版升级前请先正常停服并备份旧安装的 `logs/`。
+- 从源码部署：克隆本仓库的 `master` 分支；Windows 安装 Node.js 22 或更高版本后，双击根目录 `start-custom-windows.cmd`。完整说明见[定制版部署与验证记录](docs/GITHUB-WINDOWS-CUSTOM.md)。
 
 ```bash
 git clone --branch master https://github.com/MimaGlows/Stronghold-Protocol.git
@@ -34,7 +35,7 @@ cd Stronghold-Protocol
 
 # 卫戍协议：盟约 · Stronghold Protocol: Alliance
 
-此分支为 MimaGlows 的 Windows v0.2.5 正式定制版，保留账号、回放、好友及通讯等功能。安装、定制内容和验证记录见 [定制版说明](docs/GITHUB-WINDOWS-CUSTOM.md)；Windows 可双击 `start-custom-windows.cmd`。
+此分支为 MimaGlows 的 Windows 定制版（当前基于上游 v0.2.6），保留账号、回放、好友、匹配及通讯等功能。安装、定制内容和验证记录见 [定制版说明](docs/GITHUB-WINDOWS-CUSTOM.md)；Windows 可双击 `start-custom-windows.cmd`。
 
 《明日方舟》季节性自走棋塔防玩法「卫戍协议：盟约」的**非官方同人复刻**：浏览器即开即玩，单人或 1–4 人联机合作。
 
@@ -97,6 +98,9 @@ English summary: [below](#english).
 ## 快速开始
 
 ### 方式一：整合包（推荐）
+
+> [!NOTE]
+> **本定制版的整合包与下文不同**：本仓库的 [Releases](../../releases/latest) 只提供 Windows 完整包 `Stronghold-Protocol-Windows-<版本>.zip` 和 `SHA256SUMS.txt`，解压后双击 `启动游戏.cmd`（用法见本页开头的[游玩与部署](#游玩与部署)）。下文的精简包、更新包以及 macOS / Linux 启动方式是上游项目的说明，对应文件在 [sganggs/Stronghold-Protocol 的 Releases](https://github.com/sganggs/Stronghold-Protocol/releases)。
 
 [Releases](../../releases/latest) 里有两种整合包，代码和运行依赖完全相同，二选一；已经装好 0.2.x 的，升级时只下载更新包即可：
 
@@ -224,6 +228,19 @@ npm start          # 启动服务器：http://localhost:3000
 | [docs/BALANCE.md](docs/BALANCE.md) | 难度模型与测量（英文） |
 | [docs/research/](docs/research/00-INDEX.md) | 官方规则、数据与界面的调研记录 |
 
+### 定制版文档
+
+MimaGlows 定制版新增的说明。「开发记录」是各次定制的交付与交接记录，保留作历史依据，其中描述的运行状态以写作时为准。
+
+| 分类 | 文档 |
+|---|---|
+| 更新记录 | [CUSTOM-CHANGELOG.md](docs/CUSTOM-CHANGELOG.md)（各定制 Release 的变化） |
+| 部署 | [GITHUB-WINDOWS-CUSTOM.md](docs/GITHUB-WINDOWS-CUSTOM.md)（Windows 定制版部署与验证）· [CUSTOM-WINDOWS.md](docs/CUSTOM-WINDOWS.md) |
+| 功能说明 | [MATCHMAKING.md](docs/MATCHMAKING.md)（匹配与补位）· [SOCIAL.md](docs/SOCIAL.md)（好友与资料权限）· [COMMUNICATIONS.md](docs/COMMUNICATIONS.md)（标点与无线电）· [REPLAYS.md](docs/REPLAYS.md)（历史结算与回放）· [VOICE-PROFILES.md](docs/VOICE-PROFILES.md)（配音偏好）· [CUSTOM-SIMULATION.md](docs/CUSTOM-SIMULATION.md)（自订模拟）· [MULTIPLAYER-REFERENCE.md](docs/MULTIPLAYER-REFERENCE.md) |
+| 规则修正 | [REPAIR-20261015.md](docs/REPAIR-20261015.md)（v0.2.6 统一审计修复）· [UNIFIED-026-DELIVERY.md](docs/UNIFIED-026-DELIVERY.md) · [UPGRADE-025.md](docs/UPGRADE-025.md) · [WINDOWS-UPGRADE-024.md](docs/WINDOWS-UPGRADE-024.md) |
+| 开发记录（匹配） | [MATCHMAKING-DELIVERY.md](docs/MATCHMAKING-DELIVERY.md) · [MATCHMAKING-UI-DESIGN.md](docs/MATCHMAKING-UI-DESIGN.md) · [MATCHMAKING-UI-DELIVERY.md](docs/MATCHMAKING-UI-DELIVERY.md) · [MATCHMAKING-FEEDBACK.md](docs/MATCHMAKING-FEEDBACK.md) · [MATCHMAKING-MOTION.md](docs/MATCHMAKING-MOTION.md) · [MATCHMAKING-CUES.md](docs/MATCHMAKING-CUES.md) |
+| 开发记录（其他） | [CUSTOM-DELIVERY.md](docs/CUSTOM-DELIVERY.md) · [CUSTOM-V2-DELIVERY.md](docs/CUSTOM-V2-DELIVERY.md) · [AVATAR-TEST.md](docs/AVATAR-TEST.md) · [MAC-SOCIAL-WINDOWS-20261010.md](docs/MAC-SOCIAL-WINDOWS-20261010.md) · [SOCIAL-COMMUNICATIONS-WINDOWS-HANDOFF.md](docs/SOCIAL-COMMUNICATIONS-WINDOWS-HANDOFF.md) · [WINDOWS-FIXES-20261011.md](docs/WINDOWS-FIXES-20261011.md) · [WINDOWS-CHATGPT-HANDOFF.md](docs/WINDOWS-CHATGPT-HANDOFF.md) · [WINDOWS-V023.md](docs/WINDOWS-V023.md) |
+
 ## 开发与测试
 
 ```bash
@@ -287,7 +304,8 @@ node tools/perfbench.mjs --cpu 1,4,6 --profile             # 真实战斗的帧�
 
 An **unofficial, non-commercial fan remake** of Arknights' seasonal auto-chess tower-defense mode *Stronghold Protocol: Alliance*, played in the browser: solo, or 1–4 player co-op (AI teammates can fill seats). Combat is simulated in each player's browser, so a low-power PC can host.
 
-- **Run:** download the full bundle `Stronghold-Protocol-v<version>.zip` (~560 MB, all the art inside, the Chinese and Japanese operator voices and the official battlefield scenes included) from [Releases](../../releases/latest) — or the lite one, `…-lite.zip` (~22 MB), which downloads the art (~550 MB) on its first start; from 0.2.1 on, `…-update.zip` holds only the files changed since the earlier 0.2.x releases: stop the server, extract it over an existing 0.2.x folder and start again (the first start deletes the files the new version dropped and verifies the install) — install Node.js 22 or 24, then double-click `scripts\start-windows.bat` (Windows) or run `./scripts/start.sh` (macOS / Linux) and open <http://localhost:3000>. From source: `npm install && npm run setup && npm start` (setup downloads ~550 MB of art from public mirrors, the emotes and the how-to-play pages included; the official 3D board, some official HUD icons, two enemy models and 39 summon models are extracted from a local Arknights client — without one the game uses the 2D board and look-alike stand-ins (the summons show their avatars), and a server can copy `public/assets/local/` and `data/local-assets.json` from the full bundle of the same version).
+- **This fork (MimaGlows):** adds server-side accounts (callsign#code), avatars, friends and invites, matchmaking with backfill, replays and shared results, map pings and radio. Its Releases ship one Windows bundle, `Stronghold-Protocol-Windows-<version>.zip` (run `启动游戏.cmd`); the lite and update packages below are upstream's. Changes per release: [docs/CUSTOM-CHANGELOG.md](docs/CUSTOM-CHANGELOG.md).
+- **Run (upstream packages):** download the full bundle `Stronghold-Protocol-v<version>.zip` (~560 MB, all the art inside, the Chinese and Japanese operator voices and the official battlefield scenes included) from [Releases](../../releases/latest) — or the lite one, `…-lite.zip` (~22 MB), which downloads the art (~550 MB) on its first start; from 0.2.1 on, `…-update.zip` holds only the files changed since the earlier 0.2.x releases: stop the server, extract it over an existing 0.2.x folder and start again (the first start deletes the files the new version dropped and verifies the install) — install Node.js 22 or 24, then double-click `scripts\start-windows.bat` (Windows) or run `./scripts/start.sh` (macOS / Linux) and open <http://localhost:3000>. From source: `npm install && npm run setup && npm start` (setup downloads ~550 MB of art from public mirrors, the emotes and the how-to-play pages included; the official 3D board, some official HUD icons, two enemy models and 39 summon models are extracted from a local Arknights client — without one the game uses the 2D board and look-alike stand-ins (the summons show their avatars), and a server can copy `public/assets/local/` and `data/local-assets.json` from the full bundle of the same version).
 - **Languages:** Chinese (the default), English, 日本語, 한국어 and 繁體中文 — switch on the title screen or in Settings. Game texts come from the official clients; the Japanese, Korean and Traditional Chinese interface strings are machine translations (corrections welcome: [docs/I18N.md](docs/I18N.md)).
 - **Play with friends:** create a co-op room and share the 4-letter key or the `?room=KEY` link. On a LAN, use the address printed at start; otherwise use a virtual-LAN tool, a tunnel or a VPS — see [docs/DEPLOY.md](docs/DEPLOY.md).
 - **Disclaimer:** not affiliated with or endorsed by Hypergryph or Yostar. All Arknights names, art, audio, text and data are © their respective owners and are **not** covered by this project's GPL licence. For study and personal non-commercial use only — no selling, paid distribution, paid servers or monetisation of any kind. Content will be removed on request of the rights holders. Provided "as is", without warranty.
@@ -295,6 +313,6 @@ An **unofficial, non-commercial fan remake** of Arknights' seasonal auto-chess t
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md) (an English summary at its end); the code map is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 
-## 定制版 v0.2.5-mimaglows.1
+## 定制版更新记录
 
-集成上游 v0.2.5、回放扫描稳定性修复与大厅匹配。好友搜索需要完整代号及四位代码；匹配补位房间支持预选盟约、好友邀请、分享撤销和匹配隐私。见 [匹配规则](docs/MATCHMAKING.md) 与 [升级记录](docs/UPGRADE-025.md)。
+各定制 Release（v0.2.4-mimaglows.1 至 v0.2.6-mimaglows-unified.2）的变化见 [docs/CUSTOM-CHANGELOG.md](docs/CUSTOM-CHANGELOG.md)。

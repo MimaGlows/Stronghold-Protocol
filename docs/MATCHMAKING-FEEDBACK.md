@@ -21,12 +21,12 @@
 
 浏览器脚本test/ui/matchmaking.e2e.test.js使用独立临时服务与账号，覆盖邀请、准备、四人组局、补位、处罚、黑名单、固定底部、头像提示、敏感代号提示及选择保留。每轮四个合作账号加一个代号拒绝用例账号。原生系统prefers-reduced-motion=true条件下仍验证实际动画进度与变换。
 
-本轮截图和录屏在test/e2e/out/matchmaking-v5/：01大厅、03搜索、04手机、10盟约窗口、11手机窗口、12动效录屏、14取消恢复、17头像提示、18代号拒绝。旧失败截图不作为通过证据。
+本轮截图和录屏在test/e2e/out/matchmaking-v5/（本地测试产物，未随仓库发布）：01大厅、03搜索、04手机、10盟约窗口、11手机窗口、12动效录屏、14取消恢复、17头像提示、18代号拒绝。旧失败截图不作为通过证据。
 
 主Agent在最终实现上连续三轮浏览器验收通过：48.11秒、47.86秒、49.09秒，均0页面异常。固定底栏的入口检查使用旋转屏幕后连续四帧稳定且实际命中的位置，再执行真实鼠标点击，避免Puppeteer默认自动滚动把入口移到覆盖区下方；没有调用DOM点击来绕过遮挡。
 
 CI smoke、lint、imports和typecheck均通过，保留已有139条lint警告、0错误；最终验收脚本单独lint通过，文档更新后的31项一致性及路径检查也通过。日志为.development/feedback-browser-final-1.log至feedback-browser-final-3.log、feedback-regression.log、feedback-ci-final.log、feedback-i18n-final.log、feedback-docs-final.log和feedback-test-lint.log。未改战斗引擎及Golden基准，本轮按界面范围验证。
 
-已使用专用入口正常重启至[实验匹配版](http://127.0.0.1:3002/)，PID26612、构建dcf40e4d9674，healthz正常、首页HTTP200并含实验标识。3000仍为原PID23812，3001仍为原PID27168，两者健康且构建265539a69c38；未停止或重启生产进程，原文件、数据、配置及隧道未改。实验账号目录、Cookie和sp.matchmaking浏览器存储继续独立。
+已使用专用入口正常重启至实验匹配版（维护者本机实验实例）、构建dcf40e4d9674，healthz正常、首页HTTP200并含实验标识。3000、3001 保持原进程，两者健康且构建265539a69c38；未停止或重启生产进程，原文件、数据、配置及隧道未改。实验账号目录、Cookie和sp.matchmaking浏览器存储继续独立。
 
 副本根目录专用入口仍为启动实验匹配.cmd、实验匹配状态.cmd、停止实验匹配.cmd；只管理此实验进程。刷新页面即可加载本轮修改。

@@ -2,7 +2,7 @@
 
 本页记录上一版大厅队列交付；后续争锋频道风格、图标盟约窗口及全员准备自动匹配改版，最新访问与验证记录见[匹配UI交付](MATCHMAKING-UI-DELIVERY.md)。
 
-访问地址：[实验匹配版](http://127.0.0.1:3002/)。已通过专用入口重启，进程 PID 45740，构建 `9193613a6c74`，基础版本 v0.2.4。刷新页面加载新版。
+访问地址：实验匹配版（维护者本机实验实例）。已通过专用入口重启，构建 `9193613a6c74`，基础版本 v0.2.4。刷新页面加载新版。
 
 本副本根目录的“启动实验匹配.cmd”“实验匹配状态.cmd”“停止实验匹配.cmd”为专用入口。源码、素材、依赖和 Node 均在独立副本中实际复制；专用启动脚本使用 `.runtime/node.exe`，优先绑定 127.0.0.1:3002，占用时从 3003 起查找空闲端口。实际地址记录在 `logs/experimental-instance.json`，此文件包含私有控制凭证，请勿公开。停止通过专属管道正常停服，只操作实验进程。
 
@@ -35,11 +35,11 @@
 
 测试日志在 `.development/revision-full-final.log`、`revision-room-final.log`、`revision-package-final.log`、`revision-ci-final.log`、`revision-golden.log`、`revision-i18n.log`、`revision-browser-final.log`。旧版交付记录归档为 `.development/delivery-20261012.md`。
 
-截图：[大厅](../test/e2e/out/matchmaking-v2/01-lobby.png)、[好友队伍](../test/e2e/out/matchmaking-v2/02-party.png)、[搜索状态](../test/e2e/out/matchmaking-v2/03-searching.png)、[手机横屏](../test/e2e/out/matchmaking-v2/04-mobile.png)、[超过一分钟](../test/e2e/out/matchmaking-v2/05-extended.png)、[开局](../test/e2e/out/matchmaking-v2/06-briefing.png)、[结算](../test/e2e/out/matchmaking-v2/07-result.png)、[普通补位房间](../test/e2e/out/matchmaking-v2/08-backfill-room.png)、[处罚入口](../test/e2e/out/matchmaking-v2/09-sanction.png)。
+截图（大厅、好友队伍、搜索状态、手机横屏、超过一分钟、开局、结算、普通补位房间、处罚入口）为本地测试产物 `test/e2e/out/matchmaking-v2/`，未随仓库发布。
 
 ## 隔离复查及限制
 
-3000 仍为 PID 23812，3001 仍为 PID 27168，二者构建均为 `265539a69c38`，健康检查通过、运行时间连续。没有停止、重启或修改原进程、文件、隧道及配置。
+3000、3001 保持原进程，二者构建均为 `265539a69c38`，健康检查通过、运行时间连续。没有停止、重启或修改原进程、文件、隧道及配置。
 
 实验账号、好友、统计和回放保存在本副本的 `logs/replays/`，匹配记录在 `logs/replays/matchmaking/`，运行日志在 `logs/`。原有实验账号数据保留。Cookie 与浏览器存储使用 `sp.*` 名称；主页不设置登录 Cookie，头像缓存 Cookie 由独立客户端名称管理。
 

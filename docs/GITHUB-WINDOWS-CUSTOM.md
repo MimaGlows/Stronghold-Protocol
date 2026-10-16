@@ -8,15 +8,19 @@
 
 本机18Mbps预算下，两个极端六人房间持续30分钟通过；四个极端房间超过CPU延迟门槛，不承诺真实隧道并发。真实可用带宽还受其他服务影响。完整Windows包不携带玩家账号、好友、统计、回放、处罚、密钥或本机端口控制配置，首次运行建立新数据。
 
-此分支保留 `sganggs/Stronghold-Protocol` 官方 v0.2.4（`bc50cac01ff447eff3ab6c35f69d934bbc23b48f`）的提交历史，导入 MimaGlows 于 2026-10-12 正式运行的 Windows 定制版。GPL-3.0-or-later 许可证、原作者署名和第三方声明沿用原项目。
+历史：此分支最初保留 `sganggs/Stronghold-Protocol` 官方 v0.2.4（`bc50cac01ff447eff3ab6c35f69d934bbc23b48f`）的提交历史，导入 MimaGlows 于 2026-10-12 正式运行的 Windows 定制版。GPL-3.0-or-later 许可证、原作者署名和第三方声明沿用原项目。
 
 ## 定制功能
 
 虚拟账号及头像、账号配置和隐私同步、接管审批、服务器统计及对局详情、匿名回放分享、中日配音、好友、标点、无线电、首页与选择页署名；另保留回放分块加载、图形回退、休整快照和邀请处理修复。具体约定见 [Windows 升级说明](WINDOWS-UPGRADE-024.md)、[回放](REPLAYS.md)、[好友](SOCIAL.md) 和 [通讯](COMMUNICATIONS.md)。
 
-本版在现有定制源码上三方整合官方 v0.2.5、回放扫描 Worker 修复及匹配实验功能。新增房间盟约声明、分享撤销、匹配隐私和好友精确搜索。规则见[MATCHMAKING.md](MATCHMAKING.md)，上游与升级说明见[UPGRADE-025.md](UPGRADE-025.md)。
+v0.2.5 定制版起，在定制源码上三方整合官方 v0.2.5、回放扫描 Worker 修复及匹配实验功能。新增房间盟约声明、分享撤销、匹配隐私和好友精确搜索。规则见[MATCHMAKING.md](MATCHMAKING.md)，上游与升级说明见[UPGRADE-025.md](UPGRADE-025.md)。
 
-## 在 Windows 上运行
+## 使用 Windows 整合包
+
+在 [Releases](https://github.com/MimaGlows/Stronghold-Protocol/releases/latest) 下载 `Stronghold-Protocol-Windows-<版本>.zip`，用同页的 `SHA256SUMS.txt` 校验，完整解压后双击 `启动游戏.cmd`。整合包自带 Windows Node.js 24.19.0 和全部素材，不需要另外安装。各版本的变化见 [定制版更新记录](CUSTOM-CHANGELOG.md)。
+
+## 从源码在 Windows 上运行
 
 安装 Node.js 22 或更高版本（原实例使用 24.19.0），双击根目录 `start-custom-windows.cmd`。该入口沿用原项目安装及资源准备流程，使用 `127.0.0.1:3000`、`SP_COMBAT=client`、`SP_VERIFY=off`、`TRUST_PROXY=auto`。可选的 `.runtime/node.exe` 优先使用；否则使用系统 Node.js。窗口按 Ctrl+C 正常停服。
 

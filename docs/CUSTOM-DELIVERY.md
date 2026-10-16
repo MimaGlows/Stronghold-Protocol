@@ -16,7 +16,7 @@
 
 两轮独立静态视觉评审：初评7/10，修正主动作层级、手机控件尺寸、协议摘要和选择控件后复核8/10。剩余提升为数字单位排版与滚动边界。评审者能打开HTTP录屏，但工具未连续呈现关键动画，故没有宣称连续观看下的动效手感通过。
 
-证据位于 `test/e2e/out/custom-v1/`：`00-three-modes.png`、`01-six-seats.png`、`02-contracts.png`、`03-mobile.png`、`04-mobile-settings.png`、`05-time-limit.png`、`06-custom-motion.webm`、`motion-progress.json`。
+证据位于 `test/e2e/out/custom-v1/`（本地测试产物，未随仓库发布）：`00-three-modes.png`、`01-six-seats.png`、`02-contracts.png`、`03-mobile.png`、`04-mobile-settings.png`、`05-time-limit.png`、`06-custom-motion.webm`、`motion-progress.json`。
 
 ## 验证范围
 
@@ -32,4 +32,4 @@
 
 启停继续使用根目录的 `启动实验匹配.cmd`、`实验匹配状态.cmd`、`停止实验匹配.cmd`。优先3002，占用时向上寻找空闲端口；账户、统计、回放、日志与浏览器存储保持实验版隔离。
 
-交付实例已通过专用入口启动：`http://127.0.0.1:3002/`，PID26256，build `1b1b569c326c`，健康检查通过。3000/PID46868及3001/PID35208与本轮启动前记录一致，健康检查通过；未操作原实例文件、数据、隧道及配置。3009录屏临时审查服务已关闭。
+交付实例已通过专用入口启动：维护者本机实验实例，build `1b1b569c326c`，健康检查通过。3000、3001与本轮启动前记录一致，健康检查通过；未操作原实例文件、数据、隧道及配置。3009录屏临时审查服务已关闭。
